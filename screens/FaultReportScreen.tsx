@@ -1,4 +1,4 @@
-// screens/FaultReportScreen.tsx
+// screens/FaultReportScreen.tsx - TAM GÜNCELLENMİŞ HAL
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -12,15 +12,17 @@ import {
   Alert,
   Animated,
   Easing,
-  Switch,
   Dimensions,
   StatusBar,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useAuth } from '../hooks/useAuth';
+import useFaultReports, { FaultReport } from '../hooks/useFaultReports';
 
 const { width } = Dimensions.get('window');
 
@@ -34,15 +36,23 @@ interface FaultType {
   name: string;
   icon: string;
   color: string;
-  gradient: readonly [string, string]; // Düzeltme: readonly tuple
+  gradient: readonly [string, string];
 }
 
 interface PriorityType {
   id: string;
   name: string;
   color: string;
-  gradient: readonly [string, string]; // Düzeltme: readonly tuple
+  gradient: readonly [string, string];
   icon: string;
+}
+
+interface FormErrors {
+  title?: string;
+  description?: string;
+  faultType?: string;
+  priority?: string;
+  location?: string;
 }
 
 const ARIZA_TIPLERI: FaultType[] = [
@@ -78,41 +88,60 @@ const ARIZA_TIPLERI: FaultType[] = [
 
 const ONCELIKLER: PriorityType[] = [
   { 
-    id: '1', 
+    id: 'low', 
     name: 'Düşük', 
     color: '#27AE60', 
     gradient: ['#27AE60', '#2ECC71'] as const,
     icon: 'trending-down'
   },
   { 
-    id: '2', 
+    id: 'medium', 
     name: 'Orta', 
     color: '#F39C12', 
     gradient: ['#F39C12', '#F1C40F'] as const,
     icon: 'remove'
   },
   { 
-    id: '3', 
+    id: 'high', 
     name: 'Yüksek', 
     color: '#E74C3C', 
     gradient: ['#E74C3C', '#C0392B'] as const,
     icon: 'trending-up'
+  },
+  { 
+    id: 'critical', 
+    name: 'Kritik', 
+    color: '#8B0000', 
+    gradient: ['#8B0000', '#B22222'] as const,
+    icon: 'warning'
   }
 ];
 
 export default function FaultReportScreen({ navigation }: FaultReportScreenProps) {
+  const { user } = useAuth();
+  const { addFaultReport, loading: hookLoading } = useFaultReports();
+  
   const [darkMode, setDarkMode] = useState(false);
-  const [equipmentId, setEquipmentId] = useState('');
+  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState('Orta');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [faultType, setFaultType] = useState('Mekanik');
+  const [locationText, setLocationText] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
-  const [photoBlobs, setPhotoBlobs] = useState<Blob[]>([]);
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  
+  // FORM VALIDATION STATE
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [touched, setTouched] = useState({
+    title: false,
+    description: false,
+    faultType: false,
+    priority: false,
+    location: false,
+  });
 
   // Animations
   const successScale = useRef(new Animated.Value(0)).current;
@@ -120,6 +149,143 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
   const slideAnim = useRef(new Animated.Value(50)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  // ADIM TAKİBİ - Form dolduruldukça adımı güncelle
+  useEffect(() => {
+    let step = 1;
+    
+    if (title.trim().length >= 3) {
+      step = 2;
+    }
+    
+    if (title.trim().length >= 3 && faultType && priority) {
+      step = 3;
+    }
+    
+    if (title.trim().length >= 3 && faultType && priority && description.trim().length >= 10) {
+      step = 4;
+    }
+    
+    setCurrentStep(step);
+    
+    Animated.timing(progressAnim, {
+      toValue: step / 4,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+  }, [title, faultType, priority, description]);
+
+  const getStepDescription = (step: number) => {
+    switch (step) {
+      case 1:
+        return 'Arıza başlığını gir';
+      case 2:
+        return 'Arıza tipi ve öncelik seç';
+      case 3:
+        return 'Açıklama yaz';
+      case 4:
+        return 'Kaydı tamamla';
+      default:
+        return 'Başlayın';
+    }
+  };
+
+  const validateField = (field: string, value: string): string | undefined => {
+    switch (field) {
+      case 'title':
+        if (!value.trim()) return 'Arıza başlığı gereklidir';
+        if (value.trim().length < 3) return 'Başlık en az 3 karakter olmalıdır';
+        if (value.trim().length > 100) return 'Başlık en fazla 100 karakter olmalıdır';
+        return undefined;
+      
+      case 'description':
+        if (!value.trim()) return 'Arıza açıklaması gereklidir';
+        if (value.trim().length < 10) return 'Açıklama en az 10 karakter olmalıdır';
+        if (value.trim().length > 1000) return 'Açıklama en fazla 1000 karakter olmalıdır';
+        return undefined;
+      
+      case 'faultType':
+        if (!value) return 'Arıza tipi seçilmelidir';
+        return undefined;
+      
+      case 'priority':
+        if (!value) return 'Öncelik seviyesi seçilmelidir';
+        return undefined;
+      
+      case 'location':
+        if (!value.trim()) return 'Lokasyon bilgisi gereklidir';
+        return undefined;
+      
+      default:
+        return undefined;
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {
+      title: validateField('title', title),
+      description: validateField('description', description),
+      faultType: validateField('faultType', faultType),
+      priority: validateField('priority', priority),
+      location: validateField('location', locationText),
+    };
+
+    setErrors(newErrors);
+    
+    setTouched({
+      title: true,
+      description: true,
+      faultType: true,
+      priority: true,
+      location: true,
+    });
+
+    return !Object.values(newErrors).some(error => error !== undefined);
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    if (errors[field as keyof FormErrors]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: undefined
+      }));
+    }
+
+    setTouched(prev => ({
+      ...prev,
+      [field]: true
+    }));
+
+    switch (field) {
+      case 'title':
+        setTitle(value);
+        break;
+      case 'description':
+        setDescription(value);
+        break;
+      case 'location':
+        setLocationText(value);
+        break;
+    }
+  };
+
+  const handleFieldBlur = (field: string, value: string) => {
+    const error = validateField(field, value);
+    setErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+  };
+
+  const triggerShake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start();
+  };
 
   useEffect(() => {
     (async () => {
@@ -129,10 +295,9 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
         return;
       }
       const loc = await Location.getCurrentPositionAsync({});
-      setLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      setLocationText('Otomatik Konum');
     })();
 
-    // Start animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -151,7 +316,7 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
         useNativeDriver: false,
       }),
     ]).start();
-  }, [currentStep]);
+  }, []);
 
   const pickImage = async () => {
     try {
@@ -167,14 +332,6 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
       if (!result.canceled && result.assets.length > 0) {
         const newPhotos = result.assets.map(asset => asset.uri);
         setPhotos([...photos, ...newPhotos]);
-
-        const newBlobs = await Promise.all(
-          result.assets.map(async (asset) => {
-            const response = await fetch(asset.uri);
-            return await response.blob();
-          })
-        );
-        setPhotoBlobs([...photoBlobs, ...newBlobs]);
       }
     } catch (err) {
       Alert.alert('Hata', 'Fotoğraf seçilirken bir sorun oluştu.');
@@ -193,10 +350,6 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
       if (!result.canceled && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         setPhotos([...photos, uri]);
-
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        setPhotoBlobs([...photoBlobs, blob]);
       }
     } catch (err) {
       Alert.alert('Hata', 'Kamera açılırken bir sorun oluştu.');
@@ -206,9 +359,7 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
   const removePhoto = (index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newPhotos = photos.filter((_, i) => i !== index);
-    const newBlobs = photoBlobs.filter((_, i) => i !== index);
     setPhotos(newPhotos);
-    setPhotoBlobs(newBlobs);
   };
 
   const animateSuccess = () => {
@@ -241,51 +392,62 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
   };
 
   const handleSubmit = async () => {
-    if (!equipmentId.trim() || !description.trim()) {
-      Alert.alert('Eksik Bilgi', 'Lütfen gerekli alanları doldurun.');
+    if (!validateForm()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      triggerShake();
+      Alert.alert('Eksik Bilgi', 'Lütfen formdaki hataları düzeltin.');
       return;
     }
 
     setLoading(true);
-    setUploadProgress(0);
 
     try {
-      const uploadedUrls: string[] = [];
+      const newFault: Omit<FaultReport, 'id' | 'createdAt' | 'updatedAt'> = {
+        title: title,
+        description: description,
+        priority: priority,
+        status: 'pending',
+        location: locationText,
+        reportedBy: user?.name || 'Bilinmeyen Kullanıcı',
+      };
 
-      for (let i = 0; i < photoBlobs.length; i++) {
-        const filename = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.jpg`;
-        // Supabase upload işlemi burada olacak
-        setUploadProgress((i + 1) / photoBlobs.length);
-      }
+      console.log('Yeni Arıza Verisi:', newFault);
 
-      // Supabase insert işlemi burada olacak
+      await addFaultReport(newFault);
 
       setShowSuccess(true);
       animateSuccess();
       
-      // Reset form
       setTimeout(() => {
-        setEquipmentId('');
+        setTitle('');
         setDescription('');
+        setLocationText('');
         setPhotos([]);
-        setPhotoBlobs([]);
-        setPriority('Orta');
+        setPriority('medium');
         setFaultType('Mekanik');
         setCurrentStep(1);
+        setErrors({});
+        setTouched({
+          title: false,
+          description: false,
+          faultType: false,
+          priority: false,
+          location: false,
+        });
+        navigation.navigate('FaultList');
       }, 2000);
 
     } catch (err) {
-      Alert.alert('Hata', 'İşlem sırasında bir sorun oluştu.');
+      console.error('Arıza ekleme hatası:', err);
+      Alert.alert('Hata', 'Arıza eklenirken bir sorun oluştu.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
-      setUploadProgress(0);
     }
   };
 
   const getPriorityConfig = (pri: string) => {
-    return ONCELIKLER.find(p => p.name === pri) || ONCELIKLER[1];
+    return ONCELIKLER.find(p => p.id === pri) || ONCELIKLER[1];
   };
 
   const getFaultTypeConfig = (type: string) => {
@@ -294,7 +456,9 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
 
   const ProgressBar = () => (
     <View style={styles.progressContainer}>
-      <View style={[styles.progressBackground, { backgroundColor: darkMode ? '#334' : '#E8ECFF' }]}>
+      <View style={[styles.progressBackground, { 
+        backgroundColor: darkMode ? '#334' : '#E8ECFF' 
+      }]}>
         <Animated.View 
           style={[
             styles.progressFill,
@@ -308,51 +472,67 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
           ]} 
         />
       </View>
-      <Text style={[styles.progressText, { color: darkMode ? '#889' : '#667' }]}>
-        Adım {currentStep}/4
-      </Text>
+      <View style={styles.stepInfo}>
+        <Text style={[styles.progressText, { 
+          color: darkMode ? '#889' : '#667' 
+        }]}>
+          Adım {currentStep}/4
+        </Text>
+        <Text style={[styles.stepDescription, { 
+          color: darkMode ? '#667' : '#889' 
+        }]}>
+          {getStepDescription(currentStep)}
+        </Text>
+      </View>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={darkMode ? ['#0A0A0A', '#1A1A2E'] as const : ['#FFFFFF', '#F8FAFF'] as const} // Düzeltme: as const
-        style={styles.container}
-      >
-        <StatusBar barStyle={darkMode ? 'light-content' : 'dark-content'} translucent />
-        
-        {/* Header */}
-        <Animated.View 
-          style={[
-            styles.header,
-            { 
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }] 
-            }
-          ]}
-        >
+      <StatusBar 
+        backgroundColor={darkMode ? '#1A1A2E' : '#F8F9FF'} 
+        barStyle={darkMode ? 'light-content' : 'dark-content'} 
+        translucent={false}
+      />
+      
+      <View style={[styles.customHeader, { 
+        backgroundColor: darkMode ? '#1A1A2E' : '#F8F9FF',
+        borderBottomColor: darkMode ? '#334' : '#E8E8E8'
+      }]}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={darkMode ? '#FFF' : '#1A1A2E'} />
+          </TouchableOpacity>
           <View>
-            <Text style={[styles.title, { color: darkMode ? '#FFF' : '#1A1A2E' }]}>
+            <Text style={[styles.greeting, { color: darkMode ? '#FFF' : '#1A1A2E' }]}>
               Arıza Kaydı
             </Text>
-            <Text style={[styles.subtitle, { color: darkMode ? '#889' : '#667' }]}>
+            <Text style={[styles.date, { color: darkMode ? '#889' : '#666' }]}>
               Profesyonel arıza takip sistemi
             </Text>
           </View>
-          
-          <TouchableOpacity 
-            style={[styles.themeToggle, { backgroundColor: darkMode ? '#334' : '#E8ECFF' }]}
-            onPress={() => setDarkMode(!darkMode)}
-          >
-            <Ionicons 
-              name={darkMode ? 'moon' : 'sunny'} 
-              size={20} 
-              color={darkMode ? '#FFD700' : '#FFA500'} 
-            />
-          </TouchableOpacity>
-        </Animated.View>
+        </View>
+        <TouchableOpacity 
+          style={[styles.themeToggle, { 
+            backgroundColor: darkMode ? '#334' : '#E8ECFF' 
+          }]}
+          onPress={() => setDarkMode(!darkMode)}
+        >
+          <Ionicons 
+            name={darkMode ? 'moon' : 'sunny'} 
+            size={20} 
+            color={darkMode ? '#FFD700' : '#FFA500'} 
+          />
+        </TouchableOpacity>
+      </View>
 
+      <LinearGradient
+        colors={darkMode ? ['#0A0A0A', '#1A1A2E'] as const : ['#FFFFFF', '#F8FAFF'] as const}
+        style={styles.container}
+      >
         <ProgressBar />
 
         <ScrollView 
@@ -360,7 +540,6 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Main Form */}
           <Animated.View 
             style={[
               styles.formContainer,
@@ -370,45 +549,122 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
               }
             ]}
           >
-            {/* Equipment ID Card */}
-            <View style={[styles.formCard, { backgroundColor: darkMode ? '#1E1E2E' : '#FFF' }]}>
+            <Animated.View 
+              style={[
+                styles.formCard, 
+                { 
+                  backgroundColor: darkMode ? '#1E1E2E' : '#FFF',
+                  transform: [{ translateX: errors.title ? shakeAnim : 0 }]
+                }
+              ]}
+            >
               <View style={styles.cardHeader}>
                 <View style={[styles.iconContainer, { backgroundColor: '#667EEA' }]}>
-                  <Ionicons name="hardware-chip" size={24} color="#FFF" />
+                  <Ionicons name="document-text" size={24} color="#FFF" />
                 </View>
                 <Text style={[styles.cardTitle, { color: darkMode ? '#FFF' : '#1A1A2E' }]}>
-                  Cihaz Bilgileri
+                  Arıza Başlığı *
                 </Text>
               </View>
               
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: darkMode ? '#CCD' : '#445' }]}>
-                  Cihaz Numarası
+                  Arıza Başlığı *
                 </Text>
                 <TextInput
-                  style={[styles.textInput, { 
-                    backgroundColor: darkMode ? '#2A2A3E' : '#F8FAFF',
-                    color: darkMode ? '#FFF' : '#1A1A2E',
-                    borderColor: darkMode ? '#334' : '#E2E8F0'
-                  }]}
-                  value={equipmentId}
-                  onChangeText={setEquipmentId}
-                  placeholder="Cihaz ID giriniz..."
+                  style={[
+                    styles.textInput, 
+                    { 
+                      backgroundColor: darkMode ? '#2A2A3E' : '#F8FAFF',
+                      color: darkMode ? '#FFF' : '#1A1A2E',
+                      borderColor: errors.title ? '#E74C3C' : (darkMode ? '#334' : '#E2E8F0')
+                    }
+                  ]}
+                  value={title}
+                  onChangeText={(value) => handleFieldChange('title', value)}
+                  onBlur={() => handleFieldBlur('title', title)}
+                  placeholder="Arıza başlığını giriniz..."
                   placeholderTextColor={darkMode ? '#667' : '#AAB'}
                 />
+                {errors.title && touched.title && (
+                  <View style={styles.errorContainer}>
+                    <Ionicons name="warning" size={16} color="#E74C3C" />
+                    <Text style={styles.errorText}>{errors.title}</Text>
+                  </View>
+                )}
               </View>
-            </View>
+            </Animated.View>
 
-            {/* Fault Type Selection */}
-            <View style={[styles.formCard, { backgroundColor: darkMode ? '#1E1E2E' : '#FFF' }]}>
+            <Animated.View 
+              style={[
+                styles.formCard, 
+                { 
+                  backgroundColor: darkMode ? '#1E1E2E' : '#FFF',
+                  transform: [{ translateX: errors.location ? shakeAnim : 0 }]
+                }
+              ]}
+            >
               <View style={styles.cardHeader}>
                 <View style={[styles.iconContainer, { backgroundColor: '#4ECDC4' }]}>
+                  <Ionicons name="location" size={24} color="#FFF" />
+                </View>
+                <Text style={[styles.cardTitle, { color: darkMode ? '#FFF' : '#1A1A2E' }]}>
+                  Lokasyon *
+                </Text>
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: darkMode ? '#CCD' : '#445' }]}>
+                  Arıza Lokasyonu *
+                </Text>
+                <TextInput
+                  style={[
+                    styles.textInput, 
+                    { 
+                      backgroundColor: darkMode ? '#2A2A3E' : '#F8FAFF',
+                      color: darkMode ? '#FFF' : '#1A1A2E',
+                      borderColor: errors.location ? '#E74C3C' : (darkMode ? '#334' : '#E2E8F0')
+                    }
+                  ]}
+                  value={locationText}
+                  onChangeText={(value) => handleFieldChange('location', value)}
+                  onBlur={() => handleFieldBlur('location', locationText)}
+                  placeholder="Arızanın olduğu lokasyonu giriniz..."
+                  placeholderTextColor={darkMode ? '#667' : '#AAB'}
+                />
+                {errors.location && touched.location && (
+                  <View style={styles.errorContainer}>
+                    <Ionicons name="warning" size={16} color="#E74C3C" />
+                    <Text style={styles.errorText}>{errors.location}</Text>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+
+            <Animated.View 
+              style={[
+                styles.formCard, 
+                { 
+                  backgroundColor: darkMode ? '#1E1E2E' : '#FFF',
+                  transform: [{ translateX: errors.faultType ? shakeAnim : 0 }]
+                }
+              ]}
+            >
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: '#FF6B6B' }]}>
                   <MaterialIcons name="handyman" size={24} color="#FFF" />
                 </View>
                 <Text style={[styles.cardTitle, { color: darkMode ? '#FFF' : '#1A1A2E' }]}>
-                  Arıza Tipi
+                  Arıza Tipi *
                 </Text>
               </View>
+
+              {errors.faultType && touched.faultType && (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="warning" size={16} color="#E74C3C" />
+                  <Text style={styles.errorText}>{errors.faultType}</Text>
+                </View>
+              )}
 
               <View style={styles.gridContainer}>
                 {ARIZA_TIPLERI.map((type) => (
@@ -416,15 +672,19 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
                     key={type.id}
                     onPress={() => {
                       setFaultType(type.name);
+                      handleFieldChange('faultType', type.name);
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     }}
                     style={styles.gridItem}
                   >
                     <LinearGradient
-                      colors={faultType === type.name ? type.gradient : [darkMode ? '#2A2A3E' : '#F8FAFF', darkMode ? '#2A2A3E' : '#F8FAFF'] as const} // Düzeltme: as const
+                      colors={faultType === type.name ? type.gradient : [darkMode ? '#2A2A3E' : '#F8FAFF', darkMode ? '#2A2A3E' : '#F8FAFF'] as const}
                       style={[
                         styles.typeButton,
-                        { borderColor: faultType === type.name ? type.color : 'transparent' }
+                        { 
+                          borderColor: faultType === type.name ? type.color : 
+                                    (errors.faultType && touched.faultType ? '#E74C3C' : 'transparent')
+                        }
                       ]}
                     >
                       <MaterialIcons 
@@ -442,44 +702,62 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
+            </Animated.View>
 
-            {/* Priority Selection */}
-            <View style={[styles.formCard, { backgroundColor: darkMode ? '#1E1E2E' : '#FFF' }]}>
+            <Animated.View 
+              style={[
+                styles.formCard, 
+                { 
+                  backgroundColor: darkMode ? '#1E1E2E' : '#FFF',
+                  transform: [{ translateX: errors.priority ? shakeAnim : 0 }]
+                }
+              ]}
+            >
               <View style={styles.cardHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: '#FF6B6B' }]}>
+                <View style={[styles.iconContainer, { backgroundColor: '#FD746C' }]}>
                   <Ionicons name="warning" size={24} color="#FFF" />
                 </View>
                 <Text style={[styles.cardTitle, { color: darkMode ? '#FFF' : '#1A1A2E' }]}>
-                  Öncelik Seviyesi
+                  Öncelik Seviyesi *
                 </Text>
               </View>
+
+              {errors.priority && touched.priority && (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="warning" size={16} color="#E74C3C" />
+                  <Text style={styles.errorText}>{errors.priority}</Text>
+                </View>
+              )}
 
               <View style={styles.priorityGrid}>
                 {ONCELIKLER.map((pri) => (
                   <TouchableOpacity
                     key={pri.id}
                     onPress={() => {
-                      setPriority(pri.name);
+                      setPriority(pri.id as 'low' | 'medium' | 'high' | 'critical');
+                      handleFieldChange('priority', pri.id);
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     }}
                     style={styles.priorityItem}
                   >
                     <LinearGradient
-                      colors={priority === pri.name ? pri.gradient : [darkMode ? '#2A2A3E' : '#F8FAFF', darkMode ? '#2A2A3E' : '#F8FAFF'] as const} // Düzeltme: as const
+                      colors={priority === pri.id ? pri.gradient : [darkMode ? '#2A2A3E' : '#F8FAFF', darkMode ? '#2A2A3E' : '#F8FAFF'] as const}
                       style={[
                         styles.priorityButton,
-                        { borderColor: priority === pri.name ? pri.color : 'transparent' }
+                        { 
+                          borderColor: priority === pri.id ? pri.color : 
+                                    (errors.priority && touched.priority ? '#E74C3C' : 'transparent')
+                        }
                       ]}
                     >
                       <Ionicons 
                         name={pri.icon as any} 
                         size={24} 
-                        color={priority === pri.name ? '#FFF' : pri.color} 
+                        color={priority === pri.id ? '#FFF' : pri.color} 
                       />
                       <Text style={[
                         styles.priorityText,
-                        { color: priority === pri.name ? '#FFF' : (darkMode ? '#CCD' : '#445') }
+                        { color: priority === pri.id ? '#FFF' : (darkMode ? '#CCD' : '#445') }
                       ]}>
                         {pri.name}
                       </Text>
@@ -487,43 +765,62 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
+            </Animated.View>
 
-            {/* Description */}
-            <View style={[styles.formCard, { backgroundColor: darkMode ? '#1E1E2E' : '#FFF' }]}>
+            <Animated.View 
+              style={[
+                styles.formCard, 
+                { 
+                  backgroundColor: darkMode ? '#1E1E2E' : '#FFF',
+                  transform: [{ translateX: errors.description ? shakeAnim : 0 }]
+                }
+              ]}
+            >
               <View style={styles.cardHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: '#FD746C' }]}>
+                <View style={[styles.iconContainer, { backgroundColor: '#A78BFA' }]}>
                   <Ionicons name="document-text" size={24} color="#FFF" />
                 </View>
                 <Text style={[styles.cardTitle, { color: darkMode ? '#FFF' : '#1A1A2E' }]}>
-                  Arıza Açıklaması
+                  Arıza Açıklaması *
                 </Text>
               </View>
 
               <TextInput
-                style={[styles.textArea, { 
-                  backgroundColor: darkMode ? '#2A2A3E' : '#F8FAFF',
-                  color: darkMode ? '#FFF' : '#1A1A2E',
-                  borderColor: darkMode ? '#334' : '#E2E8F0'
-                }]}
+                style={[
+                  styles.textArea, 
+                  { 
+                    backgroundColor: darkMode ? '#2A2A3E' : '#F8FAFF',
+                    color: darkMode ? '#FFF' : '#1A1A2E',
+                    borderColor: errors.description ? '#E74C3C' : (darkMode ? '#334' : '#E2E8F0')
+                  }
+                ]}
                 value={description}
-                onChangeText={setDescription}
+                onChangeText={(value) => handleFieldChange('description', value)}
+                onBlur={() => handleFieldBlur('description', description)}
                 multiline
                 numberOfLines={6}
                 placeholder="Arızayı detaylı bir şekilde açıklayın..."
                 placeholderTextColor={darkMode ? '#667' : '#AAB'}
                 textAlignVertical="top"
               />
-            </View>
+              {errors.description && touched.description && (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="warning" size={16} color="#E74C3C" />
+                  <Text style={styles.errorText}>{errors.description}</Text>
+                </View>
+              )}
+              <Text style={[styles.charCount, { color: darkMode ? '#889' : '#667' }]}>
+                {description.length}/1000 karakter
+              </Text>
+            </Animated.View>
 
-            {/* Photo Section */}
             <View style={[styles.formCard, { backgroundColor: darkMode ? '#1E1E2E' : '#FFF' }]}>
               <View style={styles.cardHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: '#A78BFA' }]}>
+                <View style={[styles.iconContainer, { backgroundColor: '#96CEB4' }]}>
                   <Ionicons name="camera" size={24} color="#FFF" />
                 </View>
                 <Text style={[styles.cardTitle, { color: darkMode ? '#FFF' : '#1A1A2E' }]}>
-                  Görsel Ekleri
+                  Görsel Ekleri (Opsiyonel)
                 </Text>
               </View>
 
@@ -566,13 +863,12 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
               )}
             </View>
 
-            {/* Submit Button */}
             <TouchableOpacity 
               style={[styles.submitButton, { 
-                opacity: loading ? 0.7 : 1,
+                opacity: (loading || hookLoading) ? 0.7 : 1,
               }]}
               onPress={handleSubmit}
-              disabled={loading}
+              disabled={loading || hookLoading}
             >
               <LinearGradient
                 colors={getPriorityConfig(priority).gradient}
@@ -580,7 +876,7 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                {loading ? (
+                {(loading || hookLoading) ? (
                   <ActivityIndicator color="#FFF" size="small" />
                 ) : (
                   <>
@@ -593,7 +889,6 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
           </Animated.View>
         </ScrollView>
 
-        {/* Success Overlay */}
         {showSuccess && (
           <Animated.View 
             style={[
@@ -605,7 +900,7 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
             ]}
           >
             <LinearGradient
-              colors={['#4ECDC4', '#44A08D'] as const} // Düzeltme: as const
+              colors={['#4ECDC4', '#44A08D'] as const}
               style={styles.successCard}
             >
               <View style={styles.successIcon}>
@@ -613,7 +908,7 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
               </View>
               <Text style={styles.successTitle}>Kayıt Tamamlandı!</Text>
               <Text style={styles.successMessage}>
-                Arıza kaydınız başarıyla oluşturuldu. Takip numaranız: #{Math.random().toString(36).substr(2, 9).toUpperCase()}
+                Arıza kaydınız başarıyla oluşturuldu.
               </Text>
             </LinearGradient>
           </Animated.View>
@@ -623,28 +918,35 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
   );
 }
 
-// Styles kısmı aynı kalacak, sadece TypeScript hataları çözüldü
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  customHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 10 : 15,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    marginTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight || 0,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 4,
+  backButton: {
+    marginRight: 15,
+    padding: 4,
+  },
+  greeting: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  date: {
+    fontSize: 14,
+    marginTop: 2,
   },
   themeToggle: {
     padding: 12,
@@ -658,6 +960,7 @@ const styles = StyleSheet.create({
   progressContainer: {
     paddingHorizontal: 24,
     marginBottom: 8,
+    marginTop: 10,
   },
   progressBackground: {
     height: 6,
@@ -672,7 +975,16 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 12,
     fontWeight: '600',
-    textAlign: 'center',
+  },
+  stepInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  stepDescription: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
@@ -734,6 +1046,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
+  textArea: {
+    borderWidth: 2,
+    borderRadius: 16,
+    padding: 16,
+    fontSize: 16,
+    fontWeight: '500',
+    minHeight: 140,
+    textAlignVertical: 'top',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  errorText: {
+    color: '#E74C3C',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  charCount: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'right',
+    marginTop: 4,
+  },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -784,15 +1123,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  textArea: {
-    borderWidth: 2,
-    borderRadius: 16,
-    padding: 16,
-    fontSize: 16,
-    fontWeight: '500',
-    minHeight: 140,
-    textAlignVertical: 'top',
   },
   photoActions: {
     flexDirection: 'row',

@@ -136,7 +136,7 @@ export default function FaultDetailScreen({ navigation, route }: FaultDetailScre
         { text: 'İptal', style: 'cancel' },
         { 
           text: 'Ata', 
-          onPress: (name: string | undefined) => { // name parametresi type eklendi
+          onPress: (name: string | undefined) => {
             if (name) {
               setFault({
                 ...fault,
@@ -514,9 +514,366 @@ export default function FaultDetailScreen({ navigation, route }: FaultDetailScre
   );
 }
 
-// Styles kısmı aynı kalacak, buraya eklemiyorum çünkü çok uzun
-// Sadece TypeScript hatalarını çözdük
 const styles = StyleSheet.create({
-  // ... Önceki styles objesi aynen kalacak
-  // Bu kısım değişmediği için tekrar yazmıyorum
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FF',
+  },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  equipmentId: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFF',
+    marginBottom: 4,
+  },
+  faultType: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  menuButton: {
+    padding: 8,
+  },
+  headerBadges: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  priorityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  priorityText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  statusText: {
+    color: '#333',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  content: {
+    flex: 1,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 20,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECFF',
+  },
+  actionButton: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    color: '#667eea',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  statusButtons: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    backgroundColor: '#FFF',
+  },
+  statusButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  statusButtonProgress: {
+    backgroundColor: '#74B9FF',
+  },
+  statusButtonComplete: {
+    backgroundColor: '#55EFC4',
+  },
+  statusButtonCancel: {
+    backgroundColor: '#E74C3C',
+  },
+  statusButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  assignedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#FFF',
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  assignedInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  assignedTexts: {
+    marginLeft: 12,
+  },
+  assignedLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  assignedName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  contactButton: {
+    backgroundColor: '#27AE60',
+    padding: 8,
+    borderRadius: 8,
+  },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 12,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: '#667eea',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  tabTextActive: {
+    color: '#FFF',
+  },
+  tabContent: {
+    padding: 20,
+  },
+  detailSection: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  expandableSection: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginLeft: 8,
+  },
+  sectionContent: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
+  },
+  detailItem: {
+    width: '50%',
+    padding: 8,
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+  },
+  repairTimeText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#F39C12',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  repairNote: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+  },
+  toolItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  toolText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+  },
+  safetyText: {
+    fontSize: 14,
+    color: '#E74C3C',
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  photosContainer: {
+    flexDirection: 'row',
+    marginHorizontal: -4,
+  },
+  photoContainer: {
+    position: 'relative',
+    marginHorizontal: 4,
+  },
+  photo: {
+    width: 120,
+    height: 90,
+    borderRadius: 8,
+  },
+  photoIndex: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '600',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  historyList: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  historyTimeline: {
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  historyDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#667eea',
+  },
+  historyLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#E8ECFF',
+    marginTop: 4,
+  },
+  historyContent: {
+    flex: 1,
+    paddingBottom: 16,
+  },
+  historyAction: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  historyMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  historyUser: {
+    fontSize: 12,
+    color: '#667eea',
+    fontWeight: '600',
+  },
+  historyTime: {
+    fontSize: 12,
+    color: '#999',
+  },
 });

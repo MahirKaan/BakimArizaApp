@@ -1,5 +1,5 @@
-// screens/DashboardScreen.tsx
-import React, { useState, useEffect } from 'react';
+// screens/DashboardScreen.tsx - TAMAMEN DÜZELTİLMİŞ
+import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -8,10 +8,14 @@ import {
   StyleSheet, 
   RefreshControl,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  StatusBar,
+  Platform,
+  Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../hooks/useAuth';
 
 // Types tanımlamaları
 interface DashboardScreenProps {
@@ -25,6 +29,7 @@ interface StatsCardItem {
   color: string;
   icon: string;
   change: string;
+  role: string[];
 }
 
 interface QuickActionItem {
@@ -33,37 +38,138 @@ interface QuickActionItem {
   icon: string;
   color: string;
   screen: string;
+  role: string[];
 }
 
+interface ActivityItem {
+  id: number;
+  title: string;
+  time: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'critical';
+  type: 'fault' | 'maintenance' | 'inspection' | 'system';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+}
+
+const { width } = Dimensions.get('window');
+
+// ROLE BAZLI STATS KARTLARI
 const STATS_CARDS: StatsCardItem[] = [
-  { id: 1, title: 'Aktif Arızalar', value: '12', color: '#FF6B6B', icon: 'warning', change: '+2' },
-  { id: 2, title: 'Bugünkü Bildirimler', value: '8', color: '#4ECDC4', icon: 'notifications', change: '-1' },
-  { id: 3, title: 'Tamamlanan İşler', value: '23', color: '#45B7D1', icon: 'checkmark-done', change: '+5' },
-  { id: 4, title: 'Ort. Yanıt Süresi', value: '2.3s', color: '#96CEB4', icon: 'time', change: '-0.5s' },
+  { id: 1, title: 'Aktif Arızalar', value: '12', color: '#FF6B6B', icon: 'warning', change: '+2', role: ['technician', 'manager', 'admin'] },
+  { id: 2, title: 'Bugünkü Bildirimler', value: '8', color: '#4ECDC4', icon: 'notifications', change: '-1', role: ['technician', 'manager', 'admin'] },
+  { id: 3, title: 'Atanmış İşler', value: '5', color: '#45B7D1', icon: 'briefcase', change: '+1', role: ['technician'] },
+  { id: 4, title: 'Tamamlanan İşler', value: '23', color: '#96CEB4', icon: 'checkmark-done', change: '+5', role: ['technician'] },
 ];
 
+// ROLE BAZLI HIZLI İŞLEMLER
 const QUICK_ACTIONS: QuickActionItem[] = [
-  { id: 1, title: 'Hızlı Arıza Bildir', icon: 'add-circle', color: '#FF6B6B', screen: 'FaultReport' },
-  { id: 2, title: 'Arıza Listesi', icon: 'list', color: '#4ECDC4', screen: 'FaultList' },
-  { id: 3, title: 'Canlı Harita', icon: 'map', color: '#45B7D1', screen: 'Map' },
-  { id: 4, title: 'Analizler', icon: 'analytics', color: '#764ba2', screen: 'Analytics' },
+  { id: 1, title: 'Hızlı Arıza Bildir', icon: 'add-circle', color: '#FF6B6B', screen: 'FaultReport', role: ['technician'] },
+  { id: 2, title: 'Arıza Listesi', icon: 'list', color: '#4ECDC4', screen: 'FaultList', role: ['technician', 'manager'] },
+  { id: 3, title: 'Stok Sorgula', icon: 'cube', color: '#45B7D1', screen: 'Inventory', role: ['technician'] },
 ];
 
-export default function DashboardScreen({ navigation }: DashboardScreenProps) {
-  const [refreshing, setRefreshing] = useState(false);
-  const [userRole, setUserRole] = useState('technician'); // technician, manager, admin
+// AKTİVİTE VERİSİ
+const ACTIVITY_DATA: ActivityItem[] = [
+  { id: 1, title: 'Pompa istasyonu #P-12 acil müdahale', time: '5 dakika önce', status: 'critical', type: 'fault', priority: 'critical' },
+  { id: 2, title: 'Vana arızası #V-08 tamir edildi', time: '2 saat önce', status: 'completed', type: 'maintenance', priority: 'medium' },
+  { id: 3, title: 'Aylık bakım kontrolü #B-15', time: '1 gün önce', status: 'in-progress', type: 'inspection', priority: 'low' },
+];
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    // Refresh data
-    setTimeout(() => setRefreshing(false), 2000);
+// Bileşenleri dışarıda tanımla
+const StatsCard = ({ item }: { item: StatsCardItem }) => (
+  <View style={styles.statsCard}>
+    <LinearGradient
+      colors={[item.color, `${item.color}DD`]}
+      style={styles.statsGradient}
+    >
+      <View style={styles.statsHeader}>
+        <Text style={styles.statsValue}>{item.value}</Text>
+        <View style={styles.statsIcon}>
+          <Ionicons name={item.icon as any} size={20} color="#FFF" />
+        </View>
+      </View>
+      <Text style={styles.statsTitle}>{item.title}</Text>
+      <View style={styles.statsChange}>
+        <Text style={[
+          styles.changeText, 
+          { color: item.change.includes('+') ? '#27AE60' : '#E74C3C' }
+        ]}>
+          {item.change}
+        </Text>
+      </View>
+    </LinearGradient>
+  </View>
+);
+
+const QuickActionButton = ({ action, onPress }: { action: QuickActionItem; onPress: (screen: string) => void }) => (
+  <TouchableOpacity 
+    style={styles.quickAction}
+    onPress={() => onPress(action.screen)}
+  >
+    <LinearGradient
+      colors={[action.color, `${action.color}DD`]}
+      style={styles.actionGradient}
+    >
+      <Ionicons name={action.icon as any} size={24} color="#FFF" />
+    </LinearGradient>
+    <Text style={styles.actionText}>{action.title}</Text>
+  </TouchableOpacity>
+);
+
+const ActivityItem = ({ item }: { item: ActivityItem }) => {
+  const getStatusColor = (status: string) => {
+    switch(status) {
+      case 'critical': return '#FF4757';
+      case 'in-progress': return '#2ED573';
+      case 'completed': return '#1E90FF';
+      case 'pending': return '#FFA502';
+      default: return '#A4B0BE';
+    }
   };
 
-  const handleQuickAction = (screen: string) => {
-    navigation.navigate(screen);
+  const getPriorityIcon = (priority: string) => {
+    switch(priority) {
+      case 'critical': return 'flash';
+      case 'high': return 'warning';
+      case 'medium': return 'alert-circle';
+      case 'low': return 'information-circle';
+      default: return 'help-circle';
+    }
   };
 
-  const CriticalAlert = () => (
+  const getStatusText = (status: string) => {
+    switch(status) {
+      case 'in-progress': return 'Devam Ediyor';
+      case 'completed': return 'Tamamlandı';
+      case 'critical': return 'Kritik';
+      default: return 'Bekliyor';
+    }
+  };
+
+  return (
+    <View style={styles.activityItem}>
+      <View style={[styles.activityIcon, { backgroundColor: getStatusColor(item.status) }]}>
+        <Ionicons name={getPriorityIcon(item.priority) as any} size={16} color="#FFF" />
+      </View>
+      <View style={styles.activityContent}>
+        <Text style={styles.activityTitle}>{item.title}</Text>
+        <Text style={styles.activityTime}>{item.time}</Text>
+      </View>
+      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+        <Text style={styles.statusText}>
+          {getStatusText(item.status)}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+// Kritik Alert bileşeni - null yerine boş view döndür
+const CriticalAlert = ({ userRole }: { userRole: string }) => {
+  if (userRole === 'admin') {
+    return <View />;
+  }
+  
+  return (
     <TouchableOpacity style={styles.criticalAlert}>
       <View style={styles.alertIcon}>
         <Ionicons name="flash" size={20} color="#FFF" />
@@ -75,62 +181,144 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       <Ionicons name="chevron-forward" size={20} color="#FFF" />
     </TouchableOpacity>
   );
+};
 
-  const StatsCard = ({ item }: { item: StatsCardItem }) => (
-    <View style={styles.statsCard}>
-      <View style={[styles.statsIcon, { backgroundColor: item.color }]}>
-        <Ionicons name={item.icon as any} size={20} color="#FFF" />
+// Predictive Maintenance Card bileşeni - null yerine boş view döndür
+const PredictiveMaintenanceCard = ({ userRole }: { userRole: string }) => {
+  if (userRole !== 'technician') {
+    return <View />;
+  }
+  
+  return (
+    <View style={styles.predictiveCard}>
+      <View style={styles.predictiveHeader}>
+        <Ionicons name="analytics" size={24} color="#667eea" />
+        <Text style={styles.predictiveTitle}>Tahmini Bakım Önerisi</Text>
       </View>
-      <Text style={styles.statsValue}>{item.value}</Text>
-      <Text style={styles.statsTitle}>{item.title}</Text>
-      <View style={styles.statsChange}>
-        <Text style={[
-          styles.changeText, 
-          { color: item.change.includes('+') ? '#27AE60' : item.change.includes('-') ? '#E74C3C' : '#F39C12' }
-        ]}>
-          {item.change}
-        </Text>
-      </View>
+      <Text style={styles.predictiveText}>
+        Pompa #P-08 önümüzdeki 3 gün içinde bakım gerektirebilir
+      </Text>
+      <TouchableOpacity style={styles.predictiveButton}>
+        <Text style={styles.predictiveButtonText}>Detayları Gör</Text>
+      </TouchableOpacity>
     </View>
   );
+};
 
-  const QuickActionButton = ({ action }: { action: QuickActionItem }) => (
-    <TouchableOpacity 
-      style={styles.quickAction}
-      onPress={() => handleQuickAction(action.screen)}
-    >
-      <View style={[styles.actionIcon, { backgroundColor: action.color }]}>
-        <Ionicons name={action.icon as any} size={24} color="#FFF" />
+export default function DashboardScreen({ navigation }: DashboardScreenProps) {
+  const [refreshing, setRefreshing] = useState(false);
+  const { user, logout, loading: authLoading } = useAuth();
+
+  // Role göre filtreleme fonksiyonları
+  const getFilteredStats = () => {
+    const userRole = user?.role || 'technician';
+    return STATS_CARDS.filter(card => card.role.includes(userRole)).slice(0, 4);
+  };
+
+  const getFilteredActions = () => {
+    const userRole = user?.role || 'technician';
+    return QUICK_ACTIONS.filter(action => action.role.includes(userRole));
+  };
+
+  const getFilteredActivities = () => {
+    if (user?.role === 'technician') {
+      return ACTIVITY_DATA.filter(activity => activity.type !== 'system');
+    }
+    return ACTIVITY_DATA;
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 2000);
+  };
+
+  const handleQuickAction = (screen: string) => {
+    navigation.navigate(screen);
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Çıkış Yap',
+      'Uygulamadan çıkış yapmak istediğinize emin misiniz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        { 
+          text: 'Çıkış Yap', 
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            navigation.navigate('Login');
+          }
+        }
+      ]
+    );
+  };
+
+  const getRoleText = (role: string) => {
+    switch(role) {
+      case 'technician': return 'Teknisyen';
+      case 'manager': return 'Yönetici';
+      case 'admin': return 'Sistem Yöneticisi';
+      default: return 'Kullanıcı';
+    }
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Günaydın';
+    if (hour < 18) return 'İyi Günler';
+    return 'İyi Akşamlar';
+  };
+
+  if (authLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#667eea" />
+        <Text style={styles.loadingText}>Yükleniyor...</Text>
       </View>
-      <Text style={styles.actionText}>{action.title}</Text>
-    </TouchableOpacity>
-  );
+    );
+  }
+
+  const userRole = user?.role || 'technician';
 
   return (
     <View style={styles.container}>
+      <StatusBar backgroundColor="#F8F9FF" barStyle="dark-content" />
+      
+      {/* Custom Header */}
+      <LinearGradient colors={['#667eea', '#764ba2']} style={styles.headerGradient}>
+        <View style={styles.customHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.userInfo}>
+              <Text style={styles.greeting}>
+                {getGreeting()}, {user?.name || 'Kullanıcı'}!
+              </Text>
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleText}>
+                  {getRoleText(userRole)}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.profileButton} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={24} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Günaydın, Ahmet!</Text>
-            <Text style={styles.date}>15 Şubat 2024, Perşembe</Text>
-          </View>
-          <TouchableOpacity style={styles.profileButton}>
-            <Ionicons name="person-circle" size={40} color="#667eea" />
-          </TouchableOpacity>
-        </View>
-
         {/* Critical Alert */}
-        <CriticalAlert />
+        <CriticalAlert userRole={userRole} />
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          {STATS_CARDS.map((item) => (
+          {getFilteredStats().map((item) => (
             <StatsCard key={item.id} item={item} />
           ))}
         </View>
@@ -139,8 +327,12 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Hızlı İşlemler</Text>
           <View style={styles.quickActionsGrid}>
-            {QUICK_ACTIONS.map((action) => (
-              <QuickActionButton key={action.id} action={action} />
+            {getFilteredActions().map((action) => (
+              <QuickActionButton 
+                key={action.id} 
+                action={action} 
+                onPress={handleQuickAction}
+              />
             ))}
           </View>
         </View>
@@ -155,36 +347,17 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           </View>
           
           <View style={styles.activityList}>
-            {[1, 2, 3].map((item) => (
-              <View key={item} style={styles.activityItem}>
-                <View style={styles.activityIcon}>
-                  <Ionicons name="warning" size={16} color="#FF6B6B" />
-                </View>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>Vana arızası #V-{item}2</Text>
-                  <Text style={styles.activityTime}>2 saat önce</Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: '#FFEAA7' }]}>
-                  <Text style={styles.statusText}>İnceleniyor</Text>
-                </View>
-              </View>
+            {getFilteredActivities().map((item) => (
+              <ActivityItem key={item.id} item={item} />
             ))}
           </View>
         </View>
 
-        {/* Predictive Maintenance Alert */}
-        <View style={styles.predictiveCard}>
-          <View style={styles.predictiveHeader}>
-            <Ionicons name="analytics" size={24} color="#667eea" />
-            <Text style={styles.predictiveTitle}>Tahmini Bakım Önerisi</Text>
-          </View>
-          <Text style={styles.predictiveText}>
-            Pompa #P-08 önümüzdeki 3 gün içinde bakım gerektirebilir
-          </Text>
-          <TouchableOpacity style={styles.predictiveButton}>
-            <Text style={styles.predictiveButtonText}>Detayları Gör</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Predictive Maintenance Card (Technician only) */}
+        <PredictiveMaintenanceCard userRole={userRole} />
+
+        {/* Bottom padding */}
+        <View style={styles.bottomPadding} />
       </ScrollView>
 
       {/* Floating Action Button */}
@@ -203,26 +376,67 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FF',
   },
-  header: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FF',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#667eea',
+    fontWeight: '500',
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  bottomPadding: {
+    height: 80,
+  },
+  // Header Styles
+  headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  customHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   greeting: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1A1A2E',
+    color: '#FFF',
+    flex: 1,
   },
-  date: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+  roleBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginLeft: 10,
+  },
+  roleText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   profileButton: {
-    padding: 4,
+    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
   },
   criticalAlert: {
     flexDirection: 'row',
@@ -253,34 +467,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  // Stats Grid
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 10,
     marginBottom: 20,
+    marginTop: 10,
   },
   statsCard: {
     width: '50%',
     padding: 10,
+    height: 120,
   },
-  statsIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
+  statsGradient: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   statsValue: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#1A1A2E',
-    marginBottom: 2,
+    color: '#FFF',
+  },
+  statsIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   statsTitle: {
     fontSize: 12,
-    color: '#666',
+    color: 'rgba(255,255,255,0.9)',
     fontWeight: '500',
+    marginTop: 8,
   },
   statsChange: {
     marginTop: 4,
@@ -289,6 +517,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  // Sections
   section: {
     paddingHorizontal: 20,
     marginBottom: 24,
@@ -300,7 +529,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1A1A2E',
   },
@@ -309,23 +538,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  // Quick Actions
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -8,
+    marginHorizontal: -6,
   },
   quickAction: {
-    width: '50%',
-    padding: 8,
+    width: '33.33%',
+    padding: 6,
+    alignItems: 'center',
   },
-  actionIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+  actionGradient: {
+    width: 70,
+    height: 70,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
-    alignSelf: 'center',
   },
   actionText: {
     textAlign: 'center',
@@ -333,6 +563,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#333',
   },
+  // Activity List
   activityList: {
     backgroundColor: '#FFF',
     borderRadius: 16,
@@ -354,7 +585,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#FFF5F5',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -380,8 +610,9 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#333',
+    color: '#FFF',
   },
+  // Predictive Card
   predictiveCard: {
     backgroundColor: '#FFF',
     marginHorizontal: 20,
@@ -423,10 +654,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  // FAB
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 20,
+    bottom: 30,
     width: 56,
     height: 56,
     borderRadius: 28,
