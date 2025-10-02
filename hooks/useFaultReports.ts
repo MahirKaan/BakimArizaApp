@@ -16,10 +16,30 @@ export interface FaultReport {
   completedAt?: string;
 }
 
+// GLOBAL STATE - tüm component'ler aynı state'i kullansın
+let globalFaultReports: FaultReport[] = [...mockFaultReports];
+let globalListeners: Array<(reports: FaultReport[]) => void> = [];
+
+const notifyAllListeners = () => {
+  globalListeners.forEach(listener => listener([...globalFaultReports]));
+};
+
 const useFaultReports = () => {
-  const [faultReports, setFaultReports] = useState<FaultReport[]>([]);
+  const [faultReports, setFaultReports] = useState<FaultReport[]>(globalFaultReports);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Listener ekle - global state değişikliklerini dinle
+  useEffect(() => {
+    const listener = (reports: FaultReport[]) => {
+      setFaultReports(reports);
+    };
+    
+    globalListeners.push(listener);
+    return () => {
+      globalListeners = globalListeners.filter(l => l !== listener);
+    };
+  }, []);
 
   // Tüm arızaları getir
   const fetchFaultReports = async () => {
@@ -29,17 +49,16 @@ const useFaultReports = () => {
       
       // TODO: API entegrasyonu yapılınca burayı aç
       // const response = await api.get('/fault-reports');
-      // setFaultReports(response.data);
+      // globalFaultReports = response.data;
       
       // Şimdilik mock verileri kullan
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Loading simülasyonu
-      setFaultReports(mockFaultReports);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setFaultReports([...globalFaultReports]);
       
     } catch (err) {
       setError('Veriler yüklenirken hata oluştu');
       console.error('Error fetching fault reports:', err);
-      // Hata durumunda da mock verileri göster
-      setFaultReports(mockFaultReports);
+      setFaultReports([...globalFaultReports]);
     } finally {
       setLoading(false);
     }
@@ -47,7 +66,7 @@ const useFaultReports = () => {
 
   // ID'ye göre arıza getir
   const getFaultReportById = (id: number): FaultReport | undefined => {
-    return faultReports.find(report => report.id === id);
+    return globalFaultReports.find(report => report.id === id);
   };
 
   // Yeni arıza ekle
@@ -55,7 +74,7 @@ const useFaultReports = () => {
     try {
       const report: FaultReport = {
         ...newReport,
-        id: Math.max(0, ...faultReports.map(r => r.id)) + 1,
+        id: Math.max(0, ...globalFaultReports.map(r => r.id)) + 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -63,7 +82,10 @@ const useFaultReports = () => {
       // TODO: API entegrasyonu
       // await api.post('/fault-reports', report);
       
-      setFaultReports(prev => [report, ...prev]);
+      // GLOBAL STATE'i güncelle ve tüm listener'lara bildir
+      globalFaultReports = [report, ...globalFaultReports];
+      notifyAllListeners();
+      
       return report;
     } catch (err) {
       setError('Arıza eklenirken hata oluştu');
@@ -77,19 +99,19 @@ const useFaultReports = () => {
       // TODO: API entegrasyonu
       // await api.patch(`/fault-reports/${id}`, { status, assignedTo });
       
-      setFaultReports(prev =>
-        prev.map(report =>
-          report.id === id
-            ? {
-                ...report,
-                status,
-                assignedTo,
-                updatedAt: new Date().toISOString(),
-                ...(status === 'completed' && { completedAt: new Date().toISOString() })
-              }
-            : report
-        )
+      // GLOBAL STATE'i güncelle ve tüm listener'lara bildir
+      globalFaultReports = globalFaultReports.map(report =>
+        report.id === id
+          ? {
+              ...report,
+              status,
+              assignedTo,
+              updatedAt: new Date().toISOString(),
+              ...(status === 'completed' && { completedAt: new Date().toISOString() })
+            }
+          : report
       );
+      notifyAllListeners();
     } catch (err) {
       setError('Arıza güncellenirken hata oluştu');
       throw err;
@@ -102,21 +124,23 @@ const useFaultReports = () => {
       // TODO: API entegrasyonu
       // await api.delete(`/fault-reports/${id}`);
       
-      setFaultReports(prev => prev.filter(report => report.id !== id));
+      // GLOBAL STATE'i güncelle ve tüm listener'lara bildir
+      globalFaultReports = globalFaultReports.filter(report => report.id !== id);
+      notifyAllListeners();
     } catch (err) {
       setError('Arıza silinirken hata oluştu');
       throw err;
     }
   };
 
-  // Filtreleme fonksiyonları
-  const getPendingReports = () => faultReports.filter(report => report.status === 'pending');
-  const getInProgressReports = () => faultReports.filter(report => report.status === 'in_progress');
-  const getCompletedReports = () => faultReports.filter(report => report.status === 'completed');
+  // Filtreleme fonksiyonları - global state'i kullan
+  const getPendingReports = () => globalFaultReports.filter(report => report.status === 'pending');
+  const getInProgressReports = () => globalFaultReports.filter(report => report.status === 'in_progress');
+  const getCompletedReports = () => globalFaultReports.filter(report => report.status === 'completed');
 
   // Önceliğe göre filtrele
   const getReportsByPriority = (priority: FaultReport['priority']) => {
-    return faultReports.filter(report => report.priority === priority);
+    return globalFaultReports.filter(report => report.priority === priority);
   };
 
   // İlk yükleme

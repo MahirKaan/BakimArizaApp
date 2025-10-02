@@ -1,5 +1,5 @@
-// screens/DashboardScreen.tsx - TAMAMEN DÜZELTİLMİŞ
-import React, { useState } from 'react';
+// screens/DashboardScreen.tsx - MOCK ENTEGRELİ TAM HAL
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -16,6 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import useFaultReports from '../hooks/useFaultReports'; // YENİ: Hook import
 
 // Types tanımlamaları
 interface DashboardScreenProps {
@@ -54,10 +55,10 @@ const { width } = Dimensions.get('window');
 
 // ROLE BAZLI STATS KARTLARI
 const STATS_CARDS: StatsCardItem[] = [
-  { id: 1, title: 'Aktif Arızalar', value: '12', color: '#FF6B6B', icon: 'warning', change: '+2', role: ['technician', 'manager', 'admin'] },
-  { id: 2, title: 'Bugünkü Bildirimler', value: '8', color: '#4ECDC4', icon: 'notifications', change: '-1', role: ['technician', 'manager', 'admin'] },
-  { id: 3, title: 'Atanmış İşler', value: '5', color: '#45B7D1', icon: 'briefcase', change: '+1', role: ['technician'] },
-  { id: 4, title: 'Tamamlanan İşler', value: '23', color: '#96CEB4', icon: 'checkmark-done', change: '+5', role: ['technician'] },
+  { id: 1, title: 'Aktif Arızalar', value: '0', color: '#FF6B6B', icon: 'warning', change: '+0', role: ['technician', 'manager', 'admin'] },
+  { id: 2, title: 'Bugünkü Bildirimler', value: '0', color: '#4ECDC4', icon: 'notifications', change: '+0', role: ['technician', 'manager', 'admin'] },
+  { id: 3, title: 'Atanmış İşler', value: '0', color: '#45B7D1', icon: 'briefcase', change: '+0', role: ['technician'] },
+  { id: 4, title: 'Tamamlanan İşler', value: '0', color: '#96CEB4', icon: 'checkmark-done', change: '+0', role: ['technician'] },
 ];
 
 // ROLE BAZLI HIZLI İŞLEMLER
@@ -67,11 +68,11 @@ const QUICK_ACTIONS: QuickActionItem[] = [
   { id: 3, title: 'Stok Sorgula', icon: 'cube', color: '#45B7D1', screen: 'Inventory', role: ['technician'] },
 ];
 
-// AKTİVİTE VERİSİ
+// AKTİVİTE VERİSİ - MOCK
 const ACTIVITY_DATA: ActivityItem[] = [
-  { id: 1, title: 'Pompa istasyonu #P-12 acil müdahale', time: '5 dakika önce', status: 'critical', type: 'fault', priority: 'critical' },
-  { id: 2, title: 'Vana arızası #V-08 tamir edildi', time: '2 saat önce', status: 'completed', type: 'maintenance', priority: 'medium' },
-  { id: 3, title: 'Aylık bakım kontrolü #B-15', time: '1 gün önce', status: 'in-progress', type: 'inspection', priority: 'low' },
+  { id: 1, title: 'Klima Arızası bildirildi', time: '5 dakika önce', status: 'pending', type: 'fault', priority: 'high' },
+  { id: 2, title: 'Su Kaçağı tamir edildi', time: '2 saat önce', status: 'completed', type: 'maintenance', priority: 'medium' },
+  { id: 3, title: 'Elektrik Kesintisi inceleniyor', time: '1 gün önce', status: 'in-progress', type: 'fault', priority: 'critical' },
 ];
 
 // Bileşenleri dışarıda tanımla
@@ -163,9 +164,9 @@ const ActivityItem = ({ item }: { item: ActivityItem }) => {
   );
 };
 
-// Kritik Alert bileşeni - null yerine boş view döndür
-const CriticalAlert = ({ userRole }: { userRole: string }) => {
-  if (userRole === 'admin') {
+// Kritik Alert bileşeni
+const CriticalAlert = ({ hasCriticalFaults }: { hasCriticalFaults: boolean }) => {
+  if (!hasCriticalFaults) {
     return <View />;
   }
   
@@ -176,14 +177,14 @@ const CriticalAlert = ({ userRole }: { userRole: string }) => {
       </View>
       <View style={styles.alertContent}>
         <Text style={styles.alertTitle}>KRİTİK ARIZA</Text>
-        <Text style={styles.alertMessage}>Pompa istasyonu #P-12 acil müdahale gerekiyor</Text>
+        <Text style={styles.alertMessage}>Acil müdahale gereken kritik arızalar var</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#FFF" />
     </TouchableOpacity>
   );
 };
 
-// Predictive Maintenance Card bileşeni - null yerine boş view döndür
+// Predictive Maintenance Card bileşeni
 const PredictiveMaintenanceCard = ({ userRole }: { userRole: string }) => {
   if (userRole !== 'technician') {
     return <View />;
@@ -196,7 +197,7 @@ const PredictiveMaintenanceCard = ({ userRole }: { userRole: string }) => {
         <Text style={styles.predictiveTitle}>Tahmini Bakım Önerisi</Text>
       </View>
       <Text style={styles.predictiveText}>
-        Pompa #P-08 önümüzdeki 3 gün içinde bakım gerektirebilir
+        Sistem önümüzdeki hafta için 2 bakım öneriyor
       </Text>
       <TouchableOpacity style={styles.predictiveButton}>
         <Text style={styles.predictiveButtonText}>Detayları Gör</Text>
@@ -208,11 +209,93 @@ const PredictiveMaintenanceCard = ({ userRole }: { userRole: string }) => {
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const { user, logout, loading: authLoading } = useAuth();
+  
+  // YENİ: Fault reports hook'u
+  const { 
+    faultReports, 
+    loading: faultsLoading, 
+    fetchFaultReports,
+    getPendingReports,
+    getInProgressReports,
+    getCompletedReports
+  } = useFaultReports();
+
+  // YENİ: Dashboard istatistiklerini hesapla
+  const calculateStats = () => {
+    const pendingCount = getPendingReports().length;
+    const inProgressCount = getInProgressReports().length;
+    const completedCount = getCompletedReports().length;
+    const criticalCount = faultReports.filter(f => f.priority === 'critical').length;
+    
+    // STATS_CARDS'i güncelle
+    const updatedStats = STATS_CARDS.map(card => {
+      switch(card.title) {
+        case 'Aktif Arızalar':
+          return { ...card, value: pendingCount.toString(), change: pendingCount > 0 ? `+${pendingCount}` : '0' };
+        case 'Bugünkü Bildirimler':
+          return { ...card, value: faultReports.length.toString(), change: faultReports.length > 0 ? `+${faultReports.length}` : '0' };
+        case 'Atanmış İşler':
+          return { ...card, value: inProgressCount.toString(), change: inProgressCount > 0 ? `+${inProgressCount}` : '0' };
+        case 'Tamamlanan İşler':
+          return { ...card, value: completedCount.toString(), change: completedCount > 0 ? `+${completedCount}` : '0' };
+        default:
+          return card;
+      }
+    });
+
+    return updatedStats;
+  };
+
+  // YENİ: Aktivite verilerini fault reports'tan oluştur
+  // YENİ: Aktivite verilerini fault reports'tan oluştur
+const getActivityData = () => {
+  const recentFaults = faultReports.slice(0, 3).map((fault, index) => {
+    // Status mapping'i düzelt
+    let activityStatus: 'pending' | 'in-progress' | 'completed' | 'critical';
+    
+    if (fault.status === 'completed') {
+      activityStatus = 'completed';
+    } else if (fault.status === 'in_progress') {
+      activityStatus = 'in-progress';
+    } else if (fault.priority === 'critical') {
+      activityStatus = 'critical';
+    } else {
+      activityStatus = 'pending';
+    }
+
+    return {
+      id: index + 1,
+      title: `${fault.title} ${fault.status === 'completed' ? 'tamamlandı' : fault.status === 'in_progress' ? 'inceleniyor' : 'bildirildi'}`,
+      time: getTimeAgo(fault.createdAt),
+      status: activityStatus, // Düzeltilmiş status
+      type: 'fault' as const,
+      priority: fault.priority
+    };
+  });
+
+  return recentFaults.length > 0 ? recentFaults : ACTIVITY_DATA;
+};
+
+  // YENİ: Zaman farkı hesaplama
+  const getTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const past = new Date(timestamp);
+    const diffMs = now.getTime() - past.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Az önce';
+    if (diffMins < 60) return `${diffMins} dk önce`;
+    if (diffHours < 24) return `${diffHours} sa önce`;
+    return `${diffDays} gün önce`;
+  };
 
   // Role göre filtreleme fonksiyonları
   const getFilteredStats = () => {
     const userRole = user?.role || 'technician';
-    return STATS_CARDS.filter(card => card.role.includes(userRole)).slice(0, 4);
+    const stats = calculateStats();
+    return stats.filter(card => card.role.includes(userRole)).slice(0, 4);
   };
 
   const getFilteredActions = () => {
@@ -222,14 +305,17 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const getFilteredActivities = () => {
     if (user?.role === 'technician') {
-      return ACTIVITY_DATA.filter(activity => activity.type !== 'system');
+      return getActivityData().filter(activity => activity.type !== 'system');
     }
-    return ACTIVITY_DATA;
+    return getActivityData();
   };
 
-  const onRefresh = () => {
+  const hasCriticalFaults = faultReports.some(f => f.priority === 'critical');
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 2000);
+    await fetchFaultReports();
+    setRefreshing(false);
   };
 
   const handleQuickAction = (screen: string) => {
@@ -270,7 +356,12 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     return 'İyi Akşamlar';
   };
 
-  if (authLoading) {
+  // YENİ: İlk yükleme
+  useEffect(() => {
+    fetchFaultReports();
+  }, []);
+
+  if (authLoading || faultsLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#667eea" />
@@ -314,7 +405,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Critical Alert */}
-        <CriticalAlert userRole={userRole} />
+        <CriticalAlert hasCriticalFaults={hasCriticalFaults} />
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
@@ -341,7 +432,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Son Aktivite</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('FaultList')}>
               <Text style={styles.seeAllText}>Tümünü Gör</Text>
             </TouchableOpacity>
           </View>
@@ -371,6 +462,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   );
 }
 
+// Styles aynı kalıyor...
 const styles = StyleSheet.create({
   container: {
     flex: 1,

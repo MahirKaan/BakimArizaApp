@@ -1,5 +1,5 @@
-// screens/FaultDetailScreen.tsx
-import React, { useState } from 'react';
+// screens/FaultDetailScreen.tsx - TAM ENTEGRE HALİ
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../hooks/useAuth';
+import useFaultReports, { FaultReport } from '../hooks/useFaultReports';
 
 const { width } = Dimensions.get('window');
 
@@ -30,17 +32,9 @@ interface HistoryItem {
   note: string;
 }
 
-interface FaultDetail {
-  id: string;
-  equipmentId: string;
-  description: string;
-  priority: string;
-  status: string;
-  type: string;
-  timestamp: string;
-  location: string;
-  assignedTo: string | null;
-  reportedBy: string;
+// FaultDetail tipini FaultReport ile genişlet
+interface FaultDetail extends FaultReport {
+  equipmentId?: string;
   contactNumber: string;
   photos: string[];
   locationCoords: {
@@ -53,81 +47,93 @@ interface FaultDetail {
   history: HistoryItem[];
 }
 
-const FAULT_DETAIL: FaultDetail = {
-  id: '1',
-  equipmentId: 'PMP-001',
-  description: 'Pompa aşırı ısınma sorunu. Motor sıcaklığı 95°C seviyelerine çıktı. Soğutma sisteminde yetersizlik tespit edildi. Acil müdahale gerekiyor. Soğutma fanları düzgün çalışmıyor ve yağ seviyesi düşük.',
-  priority: 'high',
-  status: 'in_progress',
-  type: 'Mekanik',
-  timestamp: '2024-02-15T10:30:00Z',
-  location: 'İstasyon A - Pompa Odası',
-  assignedTo: 'Ahmet Yılmaz',
-  reportedBy: 'Mehmet Demir',
-  contactNumber: '+905551234567',
-  photos: [
-    'https://picsum.photos/400/300?1',
-    'https://picsum.photos/400/300?2',
-    'https://picsum.photos/400/300?3'
-  ],
-  locationCoords: {
-    lat: 41.0082,
-    lng: 28.9784
-  },
-  estimatedRepairTime: '2-3 saat',
-  requiredTools: ['İngiliz anahtarı seti', 'Termal kamera', 'Yağ'],
-  safetyNotes: 'Yüksek voltaj riski. İşlem öncesi güç kesilmeli.',
-  history: [
-    {
-      action: 'created',
-      timestamp: '2024-02-15T10:30:00Z',
-      user: 'Mehmet Demir',
-      note: 'Arıza bildirimi oluşturuldu'
-    },
-    {
-      action: 'assigned',
-      timestamp: '2024-02-15T11:15:00Z', 
-      user: 'Sistem Yöneticisi',
-      note: 'Ahmet Yılmaz\'a atandı'
-    },
-    {
-      action: 'in_progress',
-      timestamp: '2024-02-15T11:30:00Z',
-      user: 'Ahmet Yılmaz',
-      note: 'İncelemeye alındı, ön değerlendirme yapıldı'
-    },
-    {
-      action: 'note_added',
-      timestamp: '2024-02-15T11:45:00Z',
-      user: 'Ahmet Yılmaz',
-      note: 'Soğutma fan motoru arızalı, yedek parça gerekiyor'
-    }
-  ]
-};
-
 export default function FaultDetailScreen({ navigation, route }: FaultDetailScreenProps) {
-  const [fault, setFault] = useState<FaultDetail>(FAULT_DETAIL);
+  const { faultId } = route.params;
+  const { user } = useAuth();
+  const { getFaultReportById, updateFaultReportStatus } = useFaultReports();
+  
+  const [fault, setFault] = useState<FaultDetail | null>(null);
   const [activeTab, setActiveTab] = useState('details');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
-  const handleStatusChange = (newStatus: string) => {
-    setFault({
-      ...fault,
-      status: newStatus,
-      history: [
-        ...fault.history,
-        {
-          action: newStatus,
-          timestamp: new Date().toISOString(),
-          user: 'Ahmet Yılmaz',
-          note: `Durum ${getStatusLabel(newStatus)} olarak değiştirildi`
-        }
-      ]
-    });
-    
-    Alert.alert('Başarılı', `Arıza durumu "${getStatusLabel(newStatus)}" olarak güncellendi`);
+  // Fault verilerini hook'tan al
+  useEffect(() => {
+    if (faultId) {
+      const faultData = getFaultReportById(parseInt(faultId));
+      if (faultData) {
+        // FaultReport'u FaultDetail'e çevir
+        const faultDetail: FaultDetail = {
+          ...faultData,
+          equipmentId: faultData.title, // title'ı equipmentId olarak kullan
+          contactNumber: '+905551234567', // Varsayılan değer
+          photos: [
+            'https://picsum.photos/400/300?1',
+            'https://picsum.photos/400/300?2',
+            'https://picsum.photos/400/300?3'
+          ],
+          locationCoords: {
+            lat: 41.0082,
+            lng: 28.9784
+          },
+          estimatedRepairTime: '2-3 saat',
+          requiredTools: ['İngiliz anahtarı seti', 'Termal kamera', 'Yağ'],
+          safetyNotes: 'Yüksek voltaj riski. İşlem öncesi güç kesilmeli.',
+          history: [
+            {
+              action: 'created',
+              timestamp: faultData.createdAt,
+              user: faultData.reportedBy,
+              note: 'Arıza bildirimi oluşturuldu'
+            },
+            {
+              action: 'assigned',
+              timestamp: faultData.updatedAt,
+              user: 'Sistem Yöneticisi',
+              note: faultData.assignedTo ? `${faultData.assignedTo}'a atandı` : 'Atanmamış'
+            },
+            {
+              action: faultData.status,
+              timestamp: faultData.updatedAt,
+              user: faultData.assignedTo || 'Sistem',
+              note: `Durum "${getStatusLabel(faultData.status)}" olarak güncellendi`
+            }
+          ]
+        };
+        setFault(faultDetail);
+      }
+    }
+  }, [faultId, getFaultReportById]);
+
+  // Hook ile status güncelleme
+  const handleStatusChange = async (newStatus: 'pending' | 'in_progress' | 'completed') => {
+    if (!fault) return;
+
+    try {
+      await updateFaultReportStatus(fault.id, newStatus, user?.name);
+      
+      // Local state'i güncelle
+      setFault({
+        ...fault,
+        status: newStatus,
+        assignedTo: user?.name || fault.assignedTo,
+        history: [
+          ...fault.history,
+          {
+            action: newStatus,
+            timestamp: new Date().toISOString(),
+            user: user?.name || 'Mevcut Kullanıcı',
+            note: `Durum "${getStatusLabel(newStatus)}" olarak değiştirildi`
+          }
+        ]
+      });
+      
+      Alert.alert('Başarılı', `Arıza durumu "${getStatusLabel(newStatus)}" olarak güncellendi`);
+    } catch (error) {
+      Alert.alert('Hata', 'Durum güncellenirken bir sorun oluştu');
+    }
   };
 
+  // Hook ile atama işlemi
   const handleAssign = () => {
     Alert.prompt(
       'Teknisyen Ata',
@@ -136,22 +142,29 @@ export default function FaultDetailScreen({ navigation, route }: FaultDetailScre
         { text: 'İptal', style: 'cancel' },
         { 
           text: 'Ata', 
-          onPress: (name: string | undefined) => {
-            if (name) {
-              setFault({
-                ...fault,
-                assignedTo: name,
-                history: [
-                  ...fault.history,
-                  {
-                    action: 'assigned',
-                    timestamp: new Date().toISOString(),
-                    user: 'Sistem',
-                    note: `${name} isimli teknisyene atandı`
-                  }
-                ]
-              });
-              Alert.alert('Başarılı', `${name} teknisyene atandı`);
+          onPress: async (name: string | undefined) => {
+            if (name && fault) {
+              try {
+                await updateFaultReportStatus(fault.id, 'in_progress', name);
+                
+                setFault({
+                  ...fault,
+                  assignedTo: name,
+                  status: 'in_progress',
+                  history: [
+                    ...fault.history,
+                    {
+                      action: 'assigned',
+                      timestamp: new Date().toISOString(),
+                      user: 'Sistem',
+                      note: `${name} isimli teknisyene atandı`
+                    }
+                  ]
+                });
+                Alert.alert('Başarılı', `${name} teknisyene atandı`);
+              } catch (error) {
+                Alert.alert('Hata', 'Atama işlemi sırasında bir sorun oluştu');
+              }
             }
           }
         }
@@ -184,6 +197,8 @@ export default function FaultDetailScreen({ navigation, route }: FaultDetailScre
   };
 
   const shareFault = async () => {
+    if (!fault) return;
+    
     try {
       await Share.share({
         message: `Arıza Bildirimi: ${fault.equipmentId}\nAçıklama: ${fault.description}\nKonum: ${fault.location}\nÖncelik: ${getPriorityConfig(fault.priority).label}`,
@@ -195,17 +210,30 @@ export default function FaultDetailScreen({ navigation, route }: FaultDetailScre
   };
 
   const openInMaps = () => {
+    if (!fault) return;
+    
     const url = `https://maps.google.com/?q=${fault.locationCoords.lat},${fault.locationCoords.lng}`;
     Linking.openURL(url);
   };
 
   const callContact = () => {
+    if (!fault) return;
+    
     Linking.openURL(`tel:${fault.contactNumber}`);
   };
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
   };
+
+  // Loading state
+  if (!fault) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Yükleniyor...</Text>
+      </View>
+    );
+  }
 
   const PriorityBadge = () => {
     const config = getPriorityConfig(fault.priority);
@@ -272,16 +300,6 @@ export default function FaultDetailScreen({ navigation, route }: FaultDetailScre
           <Text style={styles.statusButtonText}>Tamamlandı</Text>
         </TouchableOpacity>
       )}
-
-      {fault.status !== 'cancelled' && (
-        <TouchableOpacity 
-          style={[styles.statusButton, styles.statusButtonCancel]}
-          onPress={() => handleStatusChange('cancelled')}
-        >
-          <Ionicons name="close" size={16} color="#FFF" />
-          <Text style={styles.statusButtonText}>İptal</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 
@@ -310,7 +328,7 @@ export default function FaultDetailScreen({ navigation, route }: FaultDetailScre
             <Ionicons name="calendar" size={20} color="#667eea" />
             <Text style={styles.detailLabel}>Tarih</Text>
             <Text style={styles.detailValue}>
-              {new Date(fault.timestamp).toLocaleDateString('tr-TR')}
+              {new Date(fault.createdAt).toLocaleDateString('tr-TR')}
             </Text>
           </View>
         </View>
@@ -448,7 +466,7 @@ export default function FaultDetailScreen({ navigation, route }: FaultDetailScre
           
           <View style={styles.headerTitle}>
             <Text style={styles.equipmentId}>{fault.equipmentId}</Text>
-            <Text style={styles.faultType}>{fault.type} Arızası</Text>
+            <Text style={styles.faultType}>Arıza Detayı</Text>
           </View>
 
           <TouchableOpacity style={styles.menuButton}>
@@ -519,6 +537,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FF',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FF',
+  },
   header: {
     paddingTop: 60,
     paddingBottom: 20,
@@ -528,32 +552,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 15,
   },
   backButton: {
-    padding: 8,
+    padding: 5,
   },
   headerTitle: {
     flex: 1,
     alignItems: 'center',
   },
   equipmentId: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#FFF',
-    marginBottom: 4,
   },
   faultType: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
   },
   menuButton: {
-    padding: 8,
+    padding: 5,
   },
   headerBadges: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    gap: 10,
   },
   priorityBadge: {
     flexDirection: 'row',
@@ -561,12 +585,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    gap: 4,
   },
   priorityText: {
     color: '#FFF',
     fontSize: 12,
     fontWeight: '600',
-    marginLeft: 4,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -574,12 +598,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    gap: 4,
   },
   statusText: {
     color: '#333',
     fontSize: 12,
     fontWeight: '600',
-    marginLeft: 4,
   },
   content: {
     flex: 1,
@@ -589,43 +613,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     padding: 20,
     backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8ECFF',
+    marginHorizontal: 20,
+    marginTop: -20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   actionButton: {
     alignItems: 'center',
-    padding: 8,
+    gap: 4,
   },
   actionButtonText: {
     fontSize: 12,
     color: '#667eea',
-    marginTop: 4,
     fontWeight: '500',
   },
   statusButtons: {
     flexDirection: 'row',
-    padding: 20,
-    gap: 12,
-    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    marginTop: 20,
   },
   statusButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    gap: 6,
   },
   statusButtonProgress: {
-    backgroundColor: '#74B9FF',
+    backgroundColor: '#667eea',
   },
   statusButtonComplete: {
-    backgroundColor: '#55EFC4',
-  },
-  statusButtonCancel: {
-    backgroundColor: '#E74C3C',
+    backgroundColor: '#27AE60',
   },
   statusButtonText: {
     color: '#FFF',
@@ -636,29 +661,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
     backgroundColor: '#FFF',
     marginHorizontal: 20,
-    marginTop: 16,
+    marginTop: 20,
+    padding: 16,
     borderRadius: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 4,
     elevation: 2,
   },
   assignedInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 12,
   },
   assignedTexts: {
-    marginLeft: 12,
+    gap: 2,
   },
   assignedLabel: {
     fontSize: 12,
     color: '#666',
-    marginBottom: 2,
   },
   assignedName: {
     fontSize: 16,
@@ -666,22 +690,17 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   contactButton: {
-    backgroundColor: '#27AE60',
-    padding: 8,
-    borderRadius: 8,
+    backgroundColor: '#667eea',
+    padding: 10,
+    borderRadius: 20,
   },
   tabs: {
     flexDirection: 'row',
-    backgroundColor: '#FFF',
     marginHorizontal: 20,
-    marginTop: 16,
+    marginTop: 20,
+    backgroundColor: '#FFF',
     borderRadius: 12,
     padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
   },
   tab: {
     flex: 1,
@@ -694,7 +713,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#666',
   },
   tabTextActive: {
@@ -705,24 +724,54 @@ const styles = StyleSheet.create({
   },
   detailSection: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    borderRadius: 12,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 4,
     elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  detailItem: {
+    width: (width - 72) / 2,
+    gap: 4,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
   expandableSection: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    borderRadius: 12,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 4,
     elevation: 2,
   },
   sectionHeader: {
@@ -730,67 +779,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  sectionTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#333',
-    marginLeft: 8,
-  },
   sectionContent: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
   },
-  detailGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -8,
-  },
-  detailItem: {
-    width: '50%',
-    padding: 8,
-    alignItems: 'center',
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-  },
-  descriptionText: {
-    fontSize: 14,
-    color: '#555',
-    lineHeight: 20,
-  },
   repairTimeText: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#F39C12',
-    textAlign: 'center',
     marginBottom: 4,
   },
   repairNote: {
     fontSize: 12,
     color: '#999',
-    textAlign: 'center',
+    fontStyle: 'italic',
   },
   toolItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     paddingVertical: 6,
   },
   toolText: {
     fontSize: 14,
     color: '#333',
-    marginLeft: 8,
   },
   safetyText: {
     fontSize: 14,
@@ -800,46 +814,40 @@ const styles = StyleSheet.create({
   },
   photosContainer: {
     flexDirection: 'row',
-    marginHorizontal: -4,
+    gap: 12,
   },
   photoContainer: {
     position: 'relative',
-    marginHorizontal: 4,
   },
   photo: {
-    width: 120,
-    height: 90,
+    width: 200,
+    height: 150,
     borderRadius: 8,
   },
   photoIndex: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 8,
+    left: 8,
     backgroundColor: 'rgba(0,0,0,0.7)',
     color: '#FFF',
-    fontSize: 10,
-    fontWeight: '600',
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
+    fontSize: 12,
+    fontWeight: '600',
   },
   historyList: {
     backgroundColor: '#FFF',
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
   },
   historyItem: {
     flexDirection: 'row',
-    marginBottom: 16,
+    gap: 12,
   },
   historyTimeline: {
     alignItems: 'center',
-    marginRight: 12,
+    width: 24,
   },
   historyDot: {
     width: 12,
@@ -850,8 +858,8 @@ const styles = StyleSheet.create({
   historyLine: {
     width: 2,
     flex: 1,
-    backgroundColor: '#E8ECFF',
-    marginTop: 4,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 4,
   },
   historyContent: {
     flex: 1,
@@ -870,7 +878,7 @@ const styles = StyleSheet.create({
   historyUser: {
     fontSize: 12,
     color: '#667eea',
-    fontWeight: '600',
+    fontWeight: '500',
   },
   historyTime: {
     fontSize: 12,

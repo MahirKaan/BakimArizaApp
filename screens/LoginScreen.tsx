@@ -1,4 +1,4 @@
-// screens/LoginScreen.tsx - GÜNCEL TAM HALİ
+// screens/LoginScreen.tsx - MOCK AUTH ENTEGRELİ TAM HALİ
 import React, { useState } from 'react';
 import { 
   View, 
@@ -43,9 +43,16 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     }
   };
 
-  const handleDemoLogin = (demoEmail: string, demoPassword: string) => {
+  const handleDemoLogin = async (demoEmail: string, demoPassword: string) => {
     setEmail(demoEmail);
     setPassword(demoPassword);
+    
+    // YENİ: Demo hesaplar için otomatik giriş
+    try {
+      await login(demoEmail, demoPassword);
+    } catch (error: any) {
+      Alert.alert('Demo Giriş Hatası', error?.message || 'Demo girişinde hata oluştu');
+    }
   };
 
   return (
@@ -62,8 +69,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             {/* Logo ve Başlık */}
             <View style={styles.logoContainer}>
               <Ionicons name="construct" size={80} color="#FFF" />
-              <Text style={styles.appTitle}>Predictive Maintenance</Text>
-              <Text style={styles.appSubtitle}>Akıllı Bakım Sistemi</Text>
+              <Text style={styles.appTitle}>Bakım Arıza Takip</Text>
+              <Text style={styles.appSubtitle}>Akıllı Bakım Yönetim Sistemi</Text>
             </View>
 
             {/* Giriş Formu */}
@@ -126,36 +133,62 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* Demo Hesaplar - DÜZENLENDİ */}
+              {/* Demo Hesaplar - GÜNCELLENDİ */}
               <View style={styles.demoContainer}>
-                <Text style={styles.demoTitle}>Demo Hesaplar:</Text>
+                <Text style={styles.demoTitle}>Demo Hesaplar (Hızlı Giriş):</Text>
                 
                 <TouchableOpacity 
                   style={styles.demoButton}
-                  onPress={() => handleDemoLogin('ahmet@bakim.com', '123456')}
+                  onPress={() => handleDemoLogin('technician@bakim.com', '123456')}
+                  disabled={loading}
                 >
-                  <Text style={styles.demoButtonText}>Teknisyen (Ahmet)</Text>
+                  <View style={styles.demoButtonContent}>
+                    <Ionicons name="person" size={16} color="#667eea" />
+                    <Text style={styles.demoButtonText}>Teknisyen</Text>
+                  </View>
+                  <Text style={styles.demoRoleText}>Ahmet Yılmaz</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
                   style={styles.demoButton}
-                  onPress={() => handleDemoLogin('mehmet@bakim.com', '123456')}
+                  onPress={() => handleDemoLogin('manager@bakim.com', '123456')}
+                  disabled={loading}
                 >
-                  <Text style={styles.demoButtonText}>Yönetici (Mehmet)</Text>
+                  <View style={styles.demoButtonContent}>
+                    <Ionicons name="people" size={16} color="#667eea" />
+                    <Text style={styles.demoButtonText}>Yönetici</Text>
+                  </View>
+                  <Text style={styles.demoRoleText}>Mehmet Demir</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
                   style={styles.demoButton}
                   onPress={() => handleDemoLogin('admin@bakim.com', '123456')}
+                  disabled={loading}
                 >
-                  <Text style={styles.demoButtonText}>Admin</Text>
+                  <View style={styles.demoButtonContent}>
+                    <Ionicons name="shield-checkmark" size={16} color="#667eea" />
+                    <Text style={styles.demoButtonText}>Sistem Admin</Text>
+                  </View>
+                  <Text style={styles.demoRoleText}>Admin Panel</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Kayıt Ol Butonu - YENİ EKLENDİ */}
+              <TouchableOpacity 
+                style={styles.registerButton}
+                onPress={() => navigation.navigate('Register')}
+              >
+                <Text style={styles.registerButtonText}>
+                  Hesabınız yok mu? <Text style={styles.registerButtonTextBold}>Kayıt Olun</Text>
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Footer - DÜZENLENDİ */}
+            {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Bakım Arıza Takip Sistemi v1.0</Text>
+              <Text style={styles.footerText}>Bakım Arıza Takip Sistemi v2.0</Text>
+              <Text style={styles.footerSubText}>Mock Data • React Native • TypeScript</Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -179,7 +212,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingVertical: 20,
-    // Telefon çubuğu için ekstra padding
     paddingBottom: Platform.OS === 'android' ? 30 : 20,
   },
   logoContainer: {
@@ -269,38 +301,64 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: '#E8ECFF',
-    // Demo butonların tıklanabilir alanını artırmak için
     marginBottom: 10,
   },
   demoTitle: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 12,
+    marginBottom: 16,
     textAlign: 'center',
+    fontWeight: '600',
   },
   demoButton: {
     backgroundColor: '#F8F9FF',
-    padding: 14, // Padding artırıldı
-    borderRadius: 8,
-    marginBottom: 10, // Margin artırıldı
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E8ECFF',
-    minHeight: 50, // Minimum yükseklik eklendi
-    justifyContent: 'center', // İçeriği dikeyde ortala
+    minHeight: 60,
+    justifyContent: 'center',
+  },
+  demoButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   demoButtonText: {
     color: '#667eea',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  demoRoleText: {
+    color: '#888',
+    fontSize: 12,
+    marginLeft: 24,
+  },
+  registerButton: {
+    marginTop: 16,
+    padding: 12,
+  },
+  registerButtonText: {
+    color: '#667eea',
     fontSize: 14,
-    fontWeight: '500',
     textAlign: 'center',
+  },
+  registerButtonTextBold: {
+    fontWeight: '700',
   },
   footer: {
     alignItems: 'center',
-    // Footer için ekstra margin
     marginBottom: Platform.OS === 'android' ? 20 : 10,
   },
   footerText: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
+    marginBottom: 4,
+  },
+  footerSubText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
   },
 });

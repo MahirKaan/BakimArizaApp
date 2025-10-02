@@ -1,4 +1,4 @@
-// hooks/useAuth.ts - OTOMATİK LOGIN KAPATILDI
+// hooks/useAuth.ts - DEMO KULLANICILAR ENTEGRELİ
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import useLocalStorage from './useLocalStorage';
 
@@ -35,6 +35,68 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// DEMO KULLANICILAR - YENİ EKLENDİ
+const DEMO_USERS: (User & { password: string })[] = [
+  {
+    id: '1',
+    email: 'technician@bakim.com',
+    password: '123456',
+    name: 'Ahmet Yılmaz',
+    role: 'technician',
+    phone: '+905551234567',
+    avatar: '👨‍🔧',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: '2', 
+    email: 'manager@bakim.com',
+    password: '123456',
+    name: 'Mehmet Demir',
+    role: 'manager',
+    phone: '+905553456789',
+    avatar: '👨‍💼',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: '3',
+    email: 'admin@bakim.com', 
+    password: '123456',
+    name: 'Sistem Admin',
+    role: 'admin',
+    phone: '+905554567890',
+    avatar: '👨‍💻',
+    createdAt: new Date().toISOString()
+  },
+  // ESKİ KULLANICILAR DA KALSIN
+  {
+    id: '4',
+    email: 'ahmet@bakim.com',
+    password: '123456',
+    name: 'Ahmet Yılmaz',
+    role: 'technician',
+    phone: '+905551234567',
+    avatar: '👨‍🔧'
+  },
+  {
+    id: '5', 
+    email: 'mehmet@bakim.com',
+    password: '123456',
+    name: 'Mehmet Demir',
+    role: 'manager',
+    phone: '+905553456789',
+    avatar: '👨‍💼'
+  },
+  {
+    id: '6',
+    email: 'admin@bakim.com', 
+    password: '123456',
+    name: 'Admin User',
+    role: 'admin',
+    phone: '+905554567890',
+    avatar: '👨‍💻'
+  }
+];
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +110,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const checkUser = async () => {
     try {
       const userData = await getData('user');
-      console.log('🔍 Stored user data:', userData); // Debug için
+      console.log('🔍 Stored user data:', userData);
       
       // OTOMATİK LOGIN KAPATILDI - SADECE DEBUG İÇİN AÇ
       // if (userData) {
@@ -56,12 +118,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // }
       
       // TEST MOD: Hiçbir kullanıcıyı otomatik login yapma
-      // Sadece manuel login ile giriş yapılabilir
       setUser(null);
       
     } catch (error) {
       console.log('Check user error:', error);
-      setUser(null); // Hata durumunda da null yap
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -71,38 +132,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setLoading(true);
       
-      // Mock users - sonra database'e geçeceğiz
-      const mockUsers: (User & { password: string })[] = [
-        {
-          id: '1',
-          email: 'ahmet@bakim.com',
-          password: '123456',
-          name: 'Ahmet Yılmaz',
-          role: 'technician',
-          phone: '+905551234567',
-          avatar: '👨‍🔧'
-        },
-        {
-          id: '2', 
-          email: 'mehmet@bakim.com',
-          password: '123456',
-          name: 'Mehmet Demir',
-          role: 'manager',
-          phone: '+905553456789',
-          avatar: '👨‍💼'
-        },
-        {
-          id: '3',
-          email: 'admin@bakim.com', 
-          password: '123456',
-          name: 'Admin User',
-          role: 'admin',
-          phone: '+905554567890',
-          avatar: '👨‍💻'
-        }
-      ];
-
-      const foundUser = mockUsers.find(u => u.email === email && u.password === password);
+      // TÜM KULLANICILARI BİRLEŞTİR
+      const allUsers = [...DEMO_USERS];
+      
+      const foundUser = allUsers.find(u => u.email === email && u.password === password);
       
       if (foundUser) {
         const { password: _, ...userWithoutPassword } = foundUser;
@@ -134,6 +167,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(userData.email)) {
         throw new Error('Geçerli bir email adresi girin');
+      }
+
+      // Email zaten var mı kontrol et
+      const allUsers = [...DEMO_USERS];
+      const existingUser = allUsers.find(u => u.email === userData.email);
+      if (existingUser) {
+        throw new Error('Bu email adresi zaten kullanılıyor');
       }
 
       const newUser: User = {
