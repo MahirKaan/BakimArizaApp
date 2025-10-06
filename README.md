@@ -12,7 +12,7 @@ Bu proje, bakım ve arıza kayıtlarını takip etmek için geliştirilmiş bir 
 
 ## Ekran Görüntüleri
 
-| Giriş Ekranı | Dashboard | Arıza Listesi | Arıza Detay | Profil |
+| Giriş Ekranı | Dashboard | Arıza Listesi | Stok Sorgulama | Arıza Kaydı |
 |---|---|---|---|---|
 | ![Giriş](screenshots/giris.jpg) | ![Dashboard](screenshots/dashboard.jpg) | ![Liste](screenshots/liste.jpg) | ![Detay](screenshots/detay.jpg) | ![Profil](screenshots/profil.jpg) |
 
