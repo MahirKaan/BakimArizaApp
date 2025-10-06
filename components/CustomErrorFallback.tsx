@@ -1,4 +1,4 @@
-// components/CustomErrorFallback.tsx
+// components/CustomErrorFallback.tsx 
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,7 +48,7 @@ export const CustomErrorFallback: React.FC<CustomErrorFallbackProps> = ({
         <TouchableOpacity 
           style={styles.reportButton}
           onPress={() => {
-            // Burada error reporting service'e yönlendirebilirsin
+            // Error reporting logic
             console.log('Error reported:', error);
           }}
         >

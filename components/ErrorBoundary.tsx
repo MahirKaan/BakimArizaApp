@@ -1,4 +1,4 @@
-// components/ErrorBoundary.tsx
+// components/ErrorBoundary.tsx - PRODUCTION READY
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 interface Props {
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  onError?: (error: Error) => void; // YENİ: Error callback
 }
 
 interface State {
@@ -30,11 +31,13 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Burada error tracking service'e loglayabilirsin (Sentry, etc.)
+    // Error tracking
     console.error('Error Boundary caught an error:', error, errorInfo);
     
-    // Haptic feedback (isteğe bağlı)
-    // Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    // YENİ: Parent component'e error'ü ilet
+    if (this.props.onError) {
+      this.props.onError(error);
+    }
   }
 
   resetError = () => {
@@ -48,7 +51,12 @@ class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       // Custom fallback UI
       if (this.props.fallback) {
-        return this.props.fallback;
+        return React.isValidElement(this.props.fallback) 
+          ? React.cloneElement(this.props.fallback as React.ReactElement<any>, {
+              error: this.state.error,
+              resetError: this.resetError
+            })
+          : this.props.fallback;
       }
 
       // Default fallback UI

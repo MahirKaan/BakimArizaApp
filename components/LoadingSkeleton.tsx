@@ -1,4 +1,4 @@
-// components/LoadingSkeleton.tsx 
+// components/LoadingSkeleton.tsx - Yeni dosya oluştur:
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 
