@@ -19,5 +19,15 @@ Bu proje, bakım ve arıza kayıtlarını takip etmek için geliştirilmiş bir 
 ## Kurulum
 
 1. Projeyi klonlayın:  
-```bash
-git clone [repo-link]
+git clone https://github.com/MahirKaan/BakimArizaApp.git
+
+2.Proje dizinine gidin:
+cd BakimArizaApp
+
+3.Gerekli paketleri yükleyin:
+npm install
+
+4.Uygulamayı başlatın:
+npm start
+
+
