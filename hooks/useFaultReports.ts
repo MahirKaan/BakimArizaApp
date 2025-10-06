@@ -93,8 +93,12 @@ const useFaultReports = () => {
     }
   };
 
-  // Arıza durumu güncelle
-  const updateFaultReportStatus = async (id: number, status: FaultReport['status'], assignedTo?: string) => {
+  // Arıza durumu güncelle - YENİ: assignedTo parametresi eklendi
+  const updateFaultReportStatus = async (
+    id: number, 
+    status: FaultReport['status'], 
+    assignedTo?: string
+  ) => {
     try {
       // TODO: API entegrasyonu
       // await api.patch(`/fault-reports/${id}`, { status, assignedTo });
@@ -105,7 +109,7 @@ const useFaultReports = () => {
           ? {
               ...report,
               status,
-              assignedTo,
+              assignedTo: assignedTo !== undefined ? assignedTo : report.assignedTo,
               updatedAt: new Date().toISOString(),
               ...(status === 'completed' && { completedAt: new Date().toISOString() })
             }
@@ -143,6 +147,41 @@ const useFaultReports = () => {
     return globalFaultReports.filter(report => report.priority === priority);
   };
 
+  // İstatistikler için yardımcı fonksiyonlar - YENİ EKLENDİ
+  const getStats = () => {
+    const total = globalFaultReports.length;
+    const pending = getPendingReports().length;
+    const inProgress = getInProgressReports().length;
+    const completed = getCompletedReports().length;
+    const critical = getReportsByPriority('critical').length;
+
+    return {
+      total,
+      pending,
+      inProgress,
+      completed,
+      critical
+    };
+  };
+
+  // Arama fonksiyonu - YENİ EKLENDİ
+  const searchFaultReports = (query: string) => {
+    const lowerQuery = query.toLowerCase();
+    return globalFaultReports.filter(report =>
+      report.title.toLowerCase().includes(lowerQuery) ||
+      report.description.toLowerCase().includes(lowerQuery) ||
+      report.location.toLowerCase().includes(lowerQuery) ||
+      report.reportedBy.toLowerCase().includes(lowerQuery)
+    );
+  };
+
+  // Teknisyene göre filtrele - YENİ EKLENDİ
+  const getReportsByTechnician = (technicianName: string) => {
+    return globalFaultReports.filter(report => 
+      report.assignedTo?.toLowerCase().includes(technicianName.toLowerCase())
+    );
+  };
+
   // İlk yükleme
   useEffect(() => {
     fetchFaultReports();
@@ -166,6 +205,11 @@ const useFaultReports = () => {
     getInProgressReports,
     getCompletedReports,
     getReportsByPriority,
+    
+    // YENİ: Utility functions
+    getStats,
+    searchFaultReports,
+    getReportsByTechnician,
   };
 };
 
