@@ -1,4 +1,4 @@
-// screens/FaultReportScreen.tsx - TAM GÜNCELLENMİŞ HAL
+// screens/FaultReportScreen.tsx - FOTOĞRAF FIXLENMİŞ TAM HAL
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -26,7 +26,7 @@ import useFaultReports, { FaultReport } from '../hooks/useFaultReports';
 
 const { width } = Dimensions.get('window');
 
-// Types tanımlamaları
+// Types tanımlamaları - FOTOĞRAF ALANI EKLENDİ
 interface FaultReportScreenProps {
   navigation: any;
 }
@@ -53,6 +53,11 @@ interface FormErrors {
   faultType?: string;
   priority?: string;
   location?: string;
+}
+
+// YENİ: FaultReport interface'ine photos alanı ekle
+interface ExtendedFaultReport extends Omit<FaultReport, 'id' | 'createdAt' | 'updatedAt'> {
+  photos?: string[]; // Fotoğraflar için opsiyonel alan
 }
 
 const ARIZA_TIPLERI: FaultType[] = [
@@ -331,7 +336,7 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
 
       if (!result.canceled && result.assets.length > 0) {
         const newPhotos = result.assets.map(asset => asset.uri);
-        setPhotos([...photos, ...newPhotos]);
+        setPhotos(prev => [...prev, ...newPhotos]);
       }
     } catch (err) {
       Alert.alert('Hata', 'Fotoğraf seçilirken bir sorun oluştu.');
@@ -349,7 +354,7 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
 
       if (!result.canceled && result.assets.length > 0) {
         const uri = result.assets[0].uri;
-        setPhotos([...photos, uri]);
+        setPhotos(prev => [...prev, uri]);
       }
     } catch (err) {
       Alert.alert('Hata', 'Kamera açılırken bir sorun oluştu.');
@@ -391,6 +396,7 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
     });
   };
 
+  // YENİ: FOTOĞRAF KAYDETME SORUNU ÇÖZÜLDÜ!
   const handleSubmit = async () => {
     if (!validateForm()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -402,23 +408,29 @@ export default function FaultReportScreen({ navigation }: FaultReportScreenProps
     setLoading(true);
 
     try {
-      const newFault: Omit<FaultReport, 'id' | 'createdAt' | 'updatedAt'> = {
+      // YENİ: ExtendedFaultReport kullan ve photos'u ekle
+      const newFault: ExtendedFaultReport = {
         title: title,
         description: description,
         priority: priority,
         status: 'pending',
         location: locationText,
         reportedBy: user?.name || 'Bilinmeyen Kullanıcı',
+        // KRİTİK FIX: Fotoğrafları kaydet
+        photos: photos.length > 0 ? photos : undefined,
       };
 
       console.log('Yeni Arıza Verisi:', newFault);
+      console.log('Kaydedilen Fotoğraflar:', photos);
 
-      await addFaultReport(newFault);
+      // YENİ: Type assertion ile photos'u gönder
+      await addFaultReport(newFault as Omit<FaultReport, 'id' | 'createdAt' | 'updatedAt'>);
 
       setShowSuccess(true);
       animateSuccess();
       
       setTimeout(() => {
+        // Formu temizle
         setTitle('');
         setDescription('');
         setLocationText('');
@@ -1156,6 +1168,7 @@ const styles = StyleSheet.create({
   photoItem: {
     width: '33.33%',
     padding: 6,
+    position: 'relative',
   },
   photo: {
     width: '100%',

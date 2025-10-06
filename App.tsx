@@ -1,9 +1,13 @@
-// App.tsx - ALTERNATİF DÜZELTİLMİŞ HAL
+// App.tsx - PRODUCTION READY WITH ERROR BOUNDARY
 import React from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+// YENİ: Error Boundary Import
+import ErrorBoundary from './components/ErrorBoundary';
+import { CustomErrorFallback } from './components/CustomErrorFallback';
 
 // Sayfa import'ları
 import LoginScreen from './screens/LoginScreen';
@@ -54,7 +58,6 @@ function Navigation() {
             options={{ animation: 'fade' }}
           />
         ) : (
-          // Doğrudan Screen component'leri - Fragment kullanmadan
           <>
             <Stack.Screen name="Dashboard" component={DashboardScreen} />
             <Stack.Screen 
@@ -74,11 +77,39 @@ function Navigation() {
   );
 }
 
+// YENİ: Error State Management
+function AppContent() {
+  const [error, setError] = React.useState<Error | null>(null);
+
+  const handleError = (error: Error) => {
+    setError(error);
+    console.error('App-level error:', error);
+  };
+
+  const resetError = () => {
+    setError(null);
+  };
+
+  return (
+    <ErrorBoundary 
+      fallback={
+        <CustomErrorFallback 
+          error={error!} 
+          resetError={resetError} 
+        />
+      }
+      onError={handleError}
+    >
+      <Navigation />
+    </ErrorBoundary>
+  );
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <Navigation />
+        <AppContent />
       </AuthProvider>
     </GestureHandlerRootView>
   );

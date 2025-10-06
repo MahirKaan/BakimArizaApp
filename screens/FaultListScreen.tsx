@@ -1,4 +1,4 @@
-// screens/FaultListScreen.tsx - MOCK ENTEGRELİ TAM HAL
+// screens/FaultListScreen.tsx - TAM ENTEGRE HALİ
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -29,6 +29,7 @@ const { width, height } = Dimensions.get('window');
 // Types tanımlamaları
 interface FaultListScreenProps {
   navigation: any;
+  route: any;
 }
 
 interface PriorityConfig {
@@ -103,10 +104,22 @@ const STATUS_CONFIG: StatusConfig = {
   }
 };
 
-export default function FaultListScreen({ navigation }: FaultListScreenProps) {
+// YENİ: FİLTRE TİPLERİ İÇİN CONSTANT
+const FILTER_TYPES = {
+  KRITIK: 'kritik',
+  AKTIF: 'aktif', 
+  BUGUNKU: 'bugunku',
+  ATANMIS: 'atanmis',
+  TAMAMLANAN: 'tamamlanan',
+  ALL: 'all'
+};
+
+export default function FaultListScreen({ navigation, route }: FaultListScreenProps) {
   const { user } = useAuth();
   
-  // YENİ: useFaultReports hook'unu kullan
+  // YENİ: Route parametrelerinden gelen filtreleri al
+  const initialFilter = route.params?.filter || 'all';
+  
   const {
     faultReports,
     loading,
@@ -118,12 +131,23 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     getPendingReports,
     getInProgressReports,
     getCompletedReports,
+    getTodaysReports,
+    getAssignedReports,
+    getReportsByPriority,
   } = useFaultReports();
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterPriority, setFilterPriority] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  
+  // YENİ: Başlangıç filtresini route'dan al - GÜNCELLENDİ
+  const [filterPriority, setFilterPriority] = useState<string>(
+    initialFilter === FILTER_TYPES.KRITIK ? 'critical' : 'all'
+  );
+  const [filterStatus, setFilterStatus] = useState<string>(
+    initialFilter === FILTER_TYPES.AKTIF ? 'in_progress' : 
+    initialFilter === FILTER_TYPES.TAMAMLANAN ? 'completed' : 'all'
+  );
+  
   const [sortBy, setSortBy] = useState('timestamp');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedFault, setSelectedFault] = useState<FaultReport | null>(null);
@@ -141,9 +165,73 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     swipeableRefs.current[faultId] = ref;
   }, []);
 
-  // YENİ: FaultReport tipine uygun filtreleme
+  // YENİ: Route parametreleri değişince filtreleri güncelle - GÜNCELLENDİ
+  useEffect(() => {
+    if (route.params?.filter) {
+      const filter = route.params.filter;
+      
+      switch (filter) {
+        case FILTER_TYPES.KRITIK:
+          setFilterPriority('critical');
+          setFilterStatus('all');
+          break;
+        case FILTER_TYPES.AKTIF:
+          setFilterPriority('all');
+          setFilterStatus('pending'); // Aktif = pending + in_progress
+          break;
+        case FILTER_TYPES.BUGUNKU:
+          // Bugünkü bildirimler için özel filtreleme yapılacak
+          setFilterPriority('all');
+          setFilterStatus('all');
+          break;
+        case FILTER_TYPES.ATANMIS:
+          // Atanmış işler için özel filtreleme yapılacak
+          setFilterPriority('all');
+          setFilterStatus('all');
+          break;
+        case FILTER_TYPES.TAMAMLANAN:
+          setFilterPriority('all');
+          setFilterStatus('completed');
+          break;
+        default:
+          setFilterPriority('all');
+          setFilterStatus('all');
+      }
+    }
+  }, [route.params?.filter]);
+
+  // YENİ: Gelişmiş filtreleme - route parametrelerine göre - GÜNCELLENDİ
   const { filteredFaults, sortedFaults } = useMemo(() => {
-    const filtered = faultReports.filter(fault => {
+    let filtered = faultReports;
+
+    // Önce route filtresine göre filtrele
+    const routeFilter = route.params?.filter;
+    if (routeFilter) {
+      switch (routeFilter) {
+        case FILTER_TYPES.KRITIK:
+          filtered = getReportsByPriority('critical').filter(f => f.status !== 'completed');
+          break;
+        case FILTER_TYPES.AKTIF:
+          // Aktif = pending + in_progress (tamamlanmamışlar)
+          filtered = faultReports.filter(f => f.status !== 'completed');
+          break;
+        case FILTER_TYPES.BUGUNKU:
+          filtered = getTodaysReports();
+          break;
+        case FILTER_TYPES.ATANMIS:
+          filtered = getAssignedReports();
+          break;
+        case FILTER_TYPES.TAMAMLANAN:
+          filtered = getCompletedReports();
+          break;
+        case FILTER_TYPES.ALL:
+        default:
+          filtered = faultReports;
+      }
+    }
+
+    // Sonra diğer filtreleri uygula
+    filtered = filtered.filter(fault => {
       const matchesSearch = 
         fault.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         fault.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -151,7 +239,14 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
         fault.reportedBy.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesPriority = filterPriority === 'all' || fault.priority === filterPriority;
-      const matchesStatus = filterStatus === 'all' || fault.status === filterStatus;
+      
+      // YENİ: Status filtrelemesi düzeltildi
+      let matchesStatus = true;
+      if (filterStatus === 'pending') {
+        matchesStatus = fault.status === 'pending' || fault.status === 'in_progress';
+      } else {
+        matchesStatus = filterStatus === 'all' || fault.status === filterStatus;
+      }
       
       return matchesSearch && matchesPriority && matchesStatus;
     });
@@ -167,7 +262,7 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     });
 
     return { filteredFaults: filtered, sortedFaults: sorted };
-  }, [faultReports, searchQuery, filterPriority, filterStatus, sortBy]);
+  }, [faultReports, searchQuery, filterPriority, filterStatus, sortBy, route.params?.filter]);
 
   // İstatistikler - useMemo ile optimize
   const stats = useMemo(() => ({
@@ -175,8 +270,12 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     pending: getPendingReports().length,
     inProgress: getInProgressReports().length,
     completed: getCompletedReports().length,
-    critical: faultReports.filter(f => f.priority === 'critical').length,
-  }), [faultReports, getPendingReports, getInProgressReports, getCompletedReports]);
+    critical: getReportsByPriority('critical').filter(f => f.status !== 'completed').length,
+    today: getTodaysReports().length,
+    assigned: getAssignedReports().length,
+    // YENİ: Aktif arıza sayısı (tamamlanmamışlar)
+    active: faultReports.filter(f => f.status !== 'completed').length,
+  }), [faultReports, getPendingReports, getInProgressReports, getCompletedReports, getReportsByPriority, getTodaysReports, getAssignedReports]);
 
   useEffect(() => {
     Animated.timing(filterAnim, {
@@ -190,14 +289,12 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    // YENİ: Hook'un fetch fonksiyonunu kullan
     await fetchFaultReports();
     
     setRefreshing(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  // YENİ: faultId'yi number olarak değiştirdim
   const handleQuickAction = (faultId: number, action: string) => {
     swipeableRefs.current[faultId.toString()]?.close();
     
@@ -226,7 +323,6 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     }).start();
   };
 
-  // YENİ: Hook'un update fonksiyonunu kullan ve faultId'yi number yap
   const markAsCompleted = async (faultId: number) => {
     try {
       await updateFaultReportStatus(faultId, 'completed', user?.name || 'Mevcut Kullanıcı');
@@ -236,7 +332,6 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     }
   };
 
-  // YENİ: Hook'un update fonksiyonunu kullan ve faultId'yi number yap
   const assignToMe = async (faultId: number) => {
     try {
       await updateFaultReportStatus(faultId, 'in_progress', user?.name || 'Mevcut Kullanıcı');
@@ -264,6 +359,47 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     return '30 dk';
   };
 
+  // YENİ: Route filtresine göre başlık belirle - GÜNCELLENDİ
+  const getHeaderTitle = () => {
+    const filter = route.params?.filter;
+    switch (filter) {
+      case FILTER_TYPES.KRITIK:
+        return 'Kritik Arızalar';
+      case FILTER_TYPES.AKTIF:
+        return 'Aktif Arızalar';
+      case FILTER_TYPES.BUGUNKU:
+        return 'Bugünkü Bildirimler';
+      case FILTER_TYPES.ATANMIS:
+        return 'Atanmış İşler';
+      case FILTER_TYPES.TAMAMLANAN:
+        return 'Tamamlanan İşler';
+      case FILTER_TYPES.ALL:
+        return 'Tüm Arızalar';
+      default:
+        return 'Arıza Listesi';
+    }
+  };
+
+  // YENİ: Route filtresine göre alt başlık belirle - GÜNCELLENDİ
+  const getHeaderSubtitle = () => {
+    const filter = route.params?.filter;
+    switch (filter) {
+      case FILTER_TYPES.KRITIK:
+        return `${stats.critical} kritik arıza • ${stats.active} aktif`;
+      case FILTER_TYPES.AKTIF:
+        return `${stats.active} aktif arıza • ${stats.pending} bekliyor`;
+      case FILTER_TYPES.BUGUNKU:
+        return `${stats.today} bugünkü bildirim • ${stats.total} toplam`;
+      case FILTER_TYPES.ATANMIS:
+        return `${stats.assigned} atanmış iş • ${stats.active} aktif`;
+      case FILTER_TYPES.TAMAMLANAN:
+        return `${stats.completed} tamamlanan iş • ${stats.total} toplam`;
+      default:
+        return `${stats.total} kayıt • ${stats.active} aktif • ${stats.critical} kritik`;
+    }
+  };
+
+  // Kalan kod aynı kalıyor...
   const PriorityFilter = () => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
       <TouchableOpacity 
@@ -317,6 +453,26 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
         </Text>
       </TouchableOpacity>
       
+      <TouchableOpacity 
+        style={[
+          styles.filterChip,
+          { borderColor: '#FF6B6B' },
+          filterStatus === 'pending' && { backgroundColor: '#FF6B6B' }
+        ]}
+        onPress={() => {
+          setFilterStatus('pending');
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+      >
+        <Ionicons name="warning" size={16} color={filterStatus === 'pending' ? '#FFF' : '#FF6B6B'} />
+        <Text style={[
+          styles.filterChipText,
+          { color: filterStatus === 'pending' ? '#FFF' : '#FF6B6B' }
+        ]}>
+          Aktif
+        </Text>
+      </TouchableOpacity>
+      
       {Object.entries(STATUS_CONFIG).map(([key, config]) => (
         <TouchableOpacity 
           key={key}
@@ -342,6 +498,7 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     </ScrollView>
   );
 
+  // QuickActionButton ve FaultCard componentleri aynı kalıyor...
   const QuickActionButton = React.memo(({ icon, label, color, onPress }: any) => (
     <TouchableOpacity style={styles.quickAction} onPress={onPress}>
       <View style={[styles.quickActionIcon, { backgroundColor: color }]}>
@@ -490,6 +647,7 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
     );
   });
 
+  // Kalan kod (closeActionSheet, error handling, return) aynı kalıyor...
   const closeActionSheet = () => {
     Animated.timing(actionSheetAnim, {
       toValue: 0,
@@ -515,7 +673,7 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
               <Ionicons name="arrow-back" size={24} color="#FFF" />
             </TouchableOpacity>
             <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>Arıza Listesi</Text>
+              <Text style={styles.headerTitle}>{getHeaderTitle()}</Text>
             </View>
           </View>
         </LinearGradient>
@@ -548,9 +706,9 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
             <Ionicons name="arrow-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Arıza Listesi</Text>
+            <Text style={styles.headerTitle}>{getHeaderTitle()}</Text>
             <Text style={styles.headerSubtitle}>
-              {stats.total} kayıt • {stats.pending} bekliyor • {stats.critical} kritik
+              {getHeaderSubtitle()}
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -657,7 +815,7 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
               {sortedFaults.length} Arıza Bulundu
             </Text>
             <Text style={styles.resultsSubtitle}>
-              {stats.pending} aktif • {stats.completed} tamamlandı
+              {getHeaderSubtitle()}
             </Text>
           </View>
           <TouchableOpacity 
@@ -675,53 +833,46 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
         </View>
 
         {/* Fault List */}
-      <FlatList
-  data={sortedFaults}
-  renderItem={({ item }) => <FaultCard fault={item} />}
-  keyExtractor={item => item.id.toString()}
-  
-  // 🔥 PERFORMANCE OPTIMIZASYONLARI:
-  removeClippedSubviews={true}
-  maxToRenderPerBatch={8}
-  updateCellsBatchingPeriod={50}
-  windowSize={21}
-  initialNumToRender={7}
-  
-  // 📏 DAHA SMOOTH SCROLLING İÇİN:
-  getItemLayout={(data, index) => ({
-    length: 140, // FaultCard'ın yaklaşık yüksekliği
-    offset: 140 * index,
-    index,
-  })}
-  
-  refreshControl={
-    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-  }
-  
-  // ✅ BUNLAR FLATLIST İÇİNDE OLMALI:
-  showsVerticalScrollIndicator={false}
-  contentContainerStyle={styles.faultsListContent}
-  ListEmptyComponent={
-    <View style={styles.emptyState}>
-      <Ionicons name="search-outline" size={64} color="#CCC" />
-      <Text style={styles.emptyStateTitle}>Arıza bulunamadı</Text>
-      <Text style={styles.emptyStateText}>
-        Arama kriterlerinize uygun arıza kaydı bulunamadı
-      </Text>
-      <TouchableOpacity 
-        style={styles.emptyStateButton}
-        onPress={() => {
-          setSearchQuery('');
-          setFilterPriority('all');
-          setFilterStatus('all');
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }}
-      >
-        <Text style={styles.emptyStateButtonText}>Filtreleri Temizle</Text>
-      </TouchableOpacity>
-    </View>
-  }
-/>
+        <FlatList
+          data={sortedFaults}
+          renderItem={({ item }) => <FaultCard fault={item} />}
+          keyExtractor={item => item.id.toString()}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={50}
+          windowSize={21}
+          initialNumToRender={7}
+          getItemLayout={(data, index) => ({
+            length: 140,
+            offset: 140 * index,
+            index,
+          })}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.faultsListContent}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={64} color="#CCC" />
+              <Text style={styles.emptyStateTitle}>Arıza bulunamadı</Text>
+              <Text style={styles.emptyStateText}>
+                Arama kriterlerinize uygun arıza kaydı bulunamadı
+              </Text>
+              <TouchableOpacity 
+                style={styles.emptyStateButton}
+                onPress={() => {
+                  setSearchQuery('');
+                  setFilterPriority('all');
+                  setFilterStatus('all');
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <Text style={styles.emptyStateButtonText}>Filtreleri Temizle</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
       </View>
 
       {/* Action Sheet */}

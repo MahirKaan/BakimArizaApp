@@ -1,7 +1,8 @@
+// hooks/useFaultReports.ts - TAM GÜNCELLENMİŞ
 import { useState, useEffect } from 'react';
 import { mockFaultReports } from '../mocks/faultReportMocks';
 
-// Types - DAHA SPESİFİK
+// Types - FOTOĞRAF ALANI EKLENDİ
 export interface FaultReport {
   id: number;
   title: string;
@@ -14,6 +15,7 @@ export interface FaultReport {
   updatedAt: string;
   assignedTo?: string;
   completedAt?: string;
+  photos?: string[]; // YENİ: Fotoğraf alanı eklendi
 }
 
 // GLOBAL STATE - tüm component'ler aynı state'i kullansın
@@ -93,7 +95,7 @@ const useFaultReports = () => {
     }
   };
 
-  // Arıza durumu güncelle - YENİ: assignedTo parametresi eklendi
+  // Arıza durumu güncelle
   const updateFaultReportStatus = async (
     id: number, 
     status: FaultReport['status'], 
@@ -147,24 +149,43 @@ const useFaultReports = () => {
     return globalFaultReports.filter(report => report.priority === priority);
   };
 
-  // İstatistikler için yardımcı fonksiyonlar - YENİ EKLENDİ
+  // Bugünkü bildirimler - YENİ EKLENDİ
+  const getTodaysReports = () => {
+    const today = new Date().toDateString();
+    return globalFaultReports.filter(report => 
+      new Date(report.createdAt).toDateString() === today
+    );
+  };
+
+  // Atanmış işler - YENİ EKLENDİ
+  const getAssignedReports = () => {
+    return globalFaultReports.filter(report => 
+      report.assignedTo && report.assignedTo.trim() !== ''
+    );
+  };
+
+  // İstatistikler için yardımcı fonksiyonlar
   const getStats = () => {
     const total = globalFaultReports.length;
     const pending = getPendingReports().length;
     const inProgress = getInProgressReports().length;
     const completed = getCompletedReports().length;
     const critical = getReportsByPriority('critical').length;
+    const today = getTodaysReports().length;
+    const assigned = getAssignedReports().length;
 
     return {
       total,
       pending,
       inProgress,
       completed,
-      critical
+      critical,
+      today,
+      assigned
     };
   };
 
-  // Arama fonksiyonu - YENİ EKLENDİ
+  // Arama fonksiyonu
   const searchFaultReports = (query: string) => {
     const lowerQuery = query.toLowerCase();
     return globalFaultReports.filter(report =>
@@ -175,7 +196,7 @@ const useFaultReports = () => {
     );
   };
 
-  // Teknisyene göre filtrele - YENİ EKLENDİ
+  // Teknisyene göre filtrele
   const getReportsByTechnician = (technicianName: string) => {
     return globalFaultReports.filter(report => 
       report.assignedTo?.toLowerCase().includes(technicianName.toLowerCase())
@@ -205,8 +226,10 @@ const useFaultReports = () => {
     getInProgressReports,
     getCompletedReports,
     getReportsByPriority,
+    getTodaysReports, // YENİ
+    getAssignedReports, // YENİ
     
-    // YENİ: Utility functions
+    // Utility functions
     getStats,
     searchFaultReports,
     getReportsByTechnician,

@@ -1,4 +1,4 @@
-// screens/DashboardScreen.tsx - MOCK ENTEGRELİ TAM HAL
+// screens/DashboardScreen.tsx - KRİTİK ARIZA KARTI KALDIRILDI
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -16,7 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
-import useFaultReports from '../hooks/useFaultReports'; // YENİ: Hook import
+import useFaultReports from '../hooks/useFaultReports';
 
 // Types tanımlamaları
 interface DashboardScreenProps {
@@ -31,6 +31,7 @@ interface StatsCardItem {
   icon: string;
   change: string;
   role: string[];
+  filter?: string;
 }
 
 interface QuickActionItem {
@@ -49,35 +50,87 @@ interface ActivityItem {
   status: 'pending' | 'in-progress' | 'completed' | 'critical';
   type: 'fault' | 'maintenance' | 'inspection' | 'system';
   priority: 'low' | 'medium' | 'high' | 'critical';
+  faultId?: number;
 }
 
 const { width } = Dimensions.get('window');
 
-// ROLE BAZLI STATS KARTLARI
+// YENİ: FİLTRELER İÇİN CONSTANT'LAR
+const FILTER_TYPES = {
+  KRITIK: 'kritik',
+  AKTIF: 'aktif',
+  BUGUNKU: 'bugunku',
+  ATANMIS: 'atanmis',
+  TAMAMLANAN: 'tamamlanan',
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed'
+};
+
+// YENİ: GÜNCELLENMİŞ STATS KARTLARI - KRİTİK ARIZA KARTI KALDIRILDI
 const STATS_CARDS: StatsCardItem[] = [
-  { id: 1, title: 'Aktif Arızalar', value: '0', color: '#FF6B6B', icon: 'warning', change: '+0', role: ['technician', 'manager', 'admin'] },
-  { id: 2, title: 'Bugünkü Bildirimler', value: '0', color: '#4ECDC4', icon: 'notifications', change: '+0', role: ['technician', 'manager', 'admin'] },
-  { id: 3, title: 'Atanmış İşler', value: '0', color: '#45B7D1', icon: 'briefcase', change: '+0', role: ['technician'] },
-  { id: 4, title: 'Tamamlanan İşler', value: '0', color: '#96CEB4', icon: 'checkmark-done', change: '+0', role: ['technician'] },
+  { 
+    id: 1, 
+    title: 'Aktif Arızalar', 
+    value: '0', 
+    color: '#FF6B6B', 
+    icon: 'warning', 
+    change: '+0', 
+    role: ['technician', 'manager', 'admin'],
+    filter: FILTER_TYPES.AKTIF
+  },
+  { 
+    id: 2, 
+    title: 'Bugünkü Bildirimler', 
+    value: '0', 
+    color: '#4ECDC4', 
+    icon: 'notifications', 
+    change: '+0', 
+    role: ['technician', 'manager', 'admin'],
+    filter: FILTER_TYPES.BUGUNKU
+  },
+  { 
+    id: 3, 
+    title: 'Atanmış İşler', 
+    value: '0', 
+    color: '#45B7D1', 
+    icon: 'briefcase', 
+    change: '+0', 
+    role: ['technician', 'manager', 'admin'],
+    filter: FILTER_TYPES.ATANMIS
+  },
+  { 
+    id: 4, 
+    title: 'Tamamlanan İşler', 
+    value: '0', 
+    color: '#96CEB4', 
+    icon: 'checkmark-done', 
+    change: '+0', 
+    role: ['technician', 'manager', 'admin'],
+    filter: FILTER_TYPES.TAMAMLANAN
+  },
 ];
 
 // ROLE BAZLI HIZLI İŞLEMLER
 const QUICK_ACTIONS: QuickActionItem[] = [
-  { id: 1, title: 'Hızlı Arıza Bildir', icon: 'add-circle', color: '#FF6B6B', screen: 'FaultReport', role: ['technician'] },
-  { id: 2, title: 'Arıza Listesi', icon: 'list', color: '#4ECDC4', screen: 'FaultList', role: ['technician', 'manager'] },
-  { id: 3, title: 'Stok Sorgula', icon: 'cube', color: '#45B7D1', screen: 'Inventory', role: ['technician'] },
+  { id: 1, title: 'Hızlı Arıza Bildir', icon: 'add-circle', color: '#FF6B6B', screen: 'FaultReport', role: ['technician', 'manager', 'admin'] },
+  { id: 2, title: 'Arıza Listesi', icon: 'list', color: '#4ECDC4', screen: 'FaultList', role: ['technician', 'manager', 'admin'] },
+  { id: 3, title: 'Stok Sorgula', icon: 'cube', color: '#45B7D1', screen: 'Inventory', role: ['technician', 'manager', 'admin'] },
 ];
 
-// AKTİVİTE VERİSİ - MOCK
+// AKTİVİTE VERİSİ - MOCK (fallback için)
 const ACTIVITY_DATA: ActivityItem[] = [
-  { id: 1, title: 'Klima Arızası bildirildi', time: '5 dakika önce', status: 'pending', type: 'fault', priority: 'high' },
-  { id: 2, title: 'Su Kaçağı tamir edildi', time: '2 saat önce', status: 'completed', type: 'maintenance', priority: 'medium' },
-  { id: 3, title: 'Elektrik Kesintisi inceleniyor', time: '1 gün önce', status: 'in-progress', type: 'fault', priority: 'critical' },
+  { id: 1, title: 'Klima Arızası bildirildi', time: '2 gün önce', status: 'pending', type: 'fault', priority: 'high' },
+  { id: 2, title: 'Su Kaçağı inceleniyor', time: '1 gün önce', status: 'in-progress', type: 'fault', priority: 'medium' },
 ];
 
 // Bileşenleri dışarıda tanımla
-const StatsCard = ({ item }: { item: StatsCardItem }) => (
-  <View style={styles.statsCard}>
+const StatsCard = ({ item, onPress }: { item: StatsCardItem; onPress: (filter?: string) => void }) => (
+  <TouchableOpacity 
+    style={styles.statsCard}
+    onPress={() => onPress(item.filter)}
+    activeOpacity={0.7}
+  >
     <LinearGradient
       colors={[item.color, `${item.color}DD`]}
       style={styles.statsGradient}
@@ -98,13 +151,14 @@ const StatsCard = ({ item }: { item: StatsCardItem }) => (
         </Text>
       </View>
     </LinearGradient>
-  </View>
+  </TouchableOpacity>
 );
 
 const QuickActionButton = ({ action, onPress }: { action: QuickActionItem; onPress: (screen: string) => void }) => (
   <TouchableOpacity 
     style={styles.quickAction}
     onPress={() => onPress(action.screen)}
+    activeOpacity={0.7}
   >
     <LinearGradient
       colors={[action.color, `${action.color}DD`]}
@@ -116,7 +170,7 @@ const QuickActionButton = ({ action, onPress }: { action: QuickActionItem; onPre
   </TouchableOpacity>
 );
 
-const ActivityItem = ({ item }: { item: ActivityItem }) => {
+const ActivityItem = ({ item, onPress }: { item: ActivityItem; onPress: (item: ActivityItem) => void }) => {
   const getStatusColor = (status: string) => {
     switch(status) {
       case 'critical': return '#FF4757';
@@ -147,7 +201,11 @@ const ActivityItem = ({ item }: { item: ActivityItem }) => {
   };
 
   return (
-    <View style={styles.activityItem}>
+    <TouchableOpacity 
+      style={styles.activityItem}
+      onPress={() => onPress(item)}
+      activeOpacity={0.7}
+    >
       <View style={[styles.activityIcon, { backgroundColor: getStatusColor(item.status) }]}>
         <Ionicons name={getPriorityIcon(item.priority) as any} size={16} color="#FFF" />
       </View>
@@ -160,18 +218,22 @@ const ActivityItem = ({ item }: { item: ActivityItem }) => {
           {getStatusText(item.status)}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
-// Kritik Alert bileşeni
-const CriticalAlert = ({ hasCriticalFaults }: { hasCriticalFaults: boolean }) => {
+// Kritik Alert bileşeni - AYNI KALDI
+const CriticalAlert = ({ hasCriticalFaults, onPress }: { hasCriticalFaults: boolean; onPress: () => void }) => {
   if (!hasCriticalFaults) {
     return <View />;
   }
   
   return (
-    <TouchableOpacity style={styles.criticalAlert}>
+    <TouchableOpacity 
+      style={styles.criticalAlert}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
       <View style={styles.alertIcon}>
         <Ionicons name="flash" size={20} color="#FFF" />
       </View>
@@ -184,33 +246,11 @@ const CriticalAlert = ({ hasCriticalFaults }: { hasCriticalFaults: boolean }) =>
   );
 };
 
-// Predictive Maintenance Card bileşeni
-const PredictiveMaintenanceCard = ({ userRole }: { userRole: string }) => {
-  if (userRole !== 'technician') {
-    return <View />;
-  }
-  
-  return (
-    <View style={styles.predictiveCard}>
-      <View style={styles.predictiveHeader}>
-        <Ionicons name="analytics" size={24} color="#667eea" />
-        <Text style={styles.predictiveTitle}>Tahmini Bakım Önerisi</Text>
-      </View>
-      <Text style={styles.predictiveText}>
-        Sistem önümüzdeki hafta için 2 bakım öneriyor
-      </Text>
-      <TouchableOpacity style={styles.predictiveButton}>
-        <Text style={styles.predictiveButtonText}>Detayları Gör</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const { user, logout, loading: authLoading } = useAuth();
   
-  // YENİ: Fault reports hook'u
+  // Fault reports hook'u
   const { 
     faultReports, 
     loading: faultsLoading, 
@@ -220,22 +260,31 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     getCompletedReports
   } = useFaultReports();
 
-  // YENİ: Dashboard istatistiklerini hesapla
+  // YENİ: Dashboard istatistiklerini hesapla - KRİTİK ARIZA KARTI KALDIRILDI
   const calculateStats = () => {
     const pendingCount = getPendingReports().length;
     const inProgressCount = getInProgressReports().length;
     const completedCount = getCompletedReports().length;
-    const criticalCount = faultReports.filter(f => f.priority === 'critical').length;
+    const criticalCount = faultReports.filter(f => f.priority === 'critical' && f.status !== 'completed').length;
+    const assignedCount = faultReports.filter(f => f.assignedTo && f.assignedTo !== '').length;
     
-    // STATS_CARDS'i güncelle
+    // Bugünkü bildirimler
+    const today = new Date().toDateString();
+    const todayCount = faultReports.filter(f => 
+      new Date(f.createdAt).toDateString() === today
+    ).length;
+    
+    // STATS_CARDS'i güncelle - KRİTİK ARIZA KARTI KALDIRILDI
     const updatedStats = STATS_CARDS.map(card => {
       switch(card.title) {
         case 'Aktif Arızalar':
-          return { ...card, value: pendingCount.toString(), change: pendingCount > 0 ? `+${pendingCount}` : '0' };
+          // Aktif = pending + in_progress (tamamlanmamışlar)
+          const activeCount = pendingCount + inProgressCount;
+          return { ...card, value: activeCount.toString(), change: activeCount > 0 ? `+${activeCount}` : '0' };
         case 'Bugünkü Bildirimler':
-          return { ...card, value: faultReports.length.toString(), change: faultReports.length > 0 ? `+${faultReports.length}` : '0' };
+          return { ...card, value: todayCount.toString(), change: todayCount > 0 ? `+${todayCount}` : '0' };
         case 'Atanmış İşler':
-          return { ...card, value: inProgressCount.toString(), change: inProgressCount > 0 ? `+${inProgressCount}` : '0' };
+          return { ...card, value: assignedCount.toString(), change: assignedCount > 0 ? `+${assignedCount}` : '0' };
         case 'Tamamlanan İşler':
           return { ...card, value: completedCount.toString(), change: completedCount > 0 ? `+${completedCount}` : '0' };
         default:
@@ -247,34 +296,48 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   };
 
   // YENİ: Aktivite verilerini fault reports'tan oluştur
-  // YENİ: Aktivite verilerini fault reports'tan oluştur
-const getActivityData = () => {
-  const recentFaults = faultReports.slice(0, 3).map((fault, index) => {
-    // Status mapping'i düzelt
-    let activityStatus: 'pending' | 'in-progress' | 'completed' | 'critical';
-    
-    if (fault.status === 'completed') {
-      activityStatus = 'completed';
-    } else if (fault.status === 'in_progress') {
-      activityStatus = 'in-progress';
-    } else if (fault.priority === 'critical') {
-      activityStatus = 'critical';
-    } else {
-      activityStatus = 'pending';
-    }
+  const getActivityData = () => {
+    // En son 3 arızayı al
+    const recentFaults = [...faultReports]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3)
+      .map((fault, index) => {
+        // Status mapping'i düzelt
+        let activityStatus: 'pending' | 'in-progress' | 'completed' | 'critical';
+        
+        if (fault.status === 'completed') {
+          activityStatus = 'completed';
+        } else if (fault.status === 'in_progress') {
+          activityStatus = 'in-progress';
+        } else if (fault.priority === 'critical') {
+          activityStatus = 'critical';
+        } else {
+          activityStatus = 'pending';
+        }
 
-    return {
-      id: index + 1,
-      title: `${fault.title} ${fault.status === 'completed' ? 'tamamlandı' : fault.status === 'in_progress' ? 'inceleniyor' : 'bildirildi'}`,
-      time: getTimeAgo(fault.createdAt),
-      status: activityStatus, // Düzeltilmiş status
-      type: 'fault' as const,
-      priority: fault.priority
-    };
-  });
+        // Title'ı duruma göre oluştur
+        let title = fault.title;
+        if (fault.status === 'completed') {
+          title = `${fault.title} tamamlandı`;
+        } else if (fault.status === 'in_progress') {
+          title = `${fault.title} inceleniyor`;
+        } else {
+          title = `${fault.title} bildirildi`;
+        }
 
-  return recentFaults.length > 0 ? recentFaults : ACTIVITY_DATA;
-};
+        return {
+          id: fault.id,
+          title: title,
+          time: getTimeAgo(fault.createdAt),
+          status: activityStatus,
+          type: 'fault' as const,
+          priority: fault.priority,
+          faultId: fault.id
+        };
+      });
+
+    return recentFaults.length > 0 ? recentFaults : ACTIVITY_DATA;
+  };
 
   // YENİ: Zaman farkı hesaplama
   const getTimeAgo = (timestamp: string) => {
@@ -295,7 +358,7 @@ const getActivityData = () => {
   const getFilteredStats = () => {
     const userRole = user?.role || 'technician';
     const stats = calculateStats();
-    return stats.filter(card => card.role.includes(userRole)).slice(0, 4);
+    return stats.filter(card => card.role.includes(userRole));
   };
 
   const getFilteredActions = () => {
@@ -310,7 +373,7 @@ const getActivityData = () => {
     return getActivityData();
   };
 
-  const hasCriticalFaults = faultReports.some(f => f.priority === 'critical');
+  const hasCriticalFaults = faultReports.some(f => f.priority === 'critical' && f.status !== 'completed');
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -318,8 +381,25 @@ const getActivityData = () => {
     setRefreshing(false);
   };
 
+  // YENİ: Navigation handler'ları
   const handleQuickAction = (screen: string) => {
     navigation.navigate(screen);
+  };
+
+  const handleStatsCardPress = (filter?: string) => {
+    navigation.navigate('FaultList', { filter });
+  };
+
+  const handleActivityPress = (activity: ActivityItem) => {
+    if (activity.faultId) {
+      navigation.navigate('FaultDetail', { faultId: activity.faultId });
+    } else {
+      navigation.navigate('FaultList');
+    }
+  };
+
+  const handleCriticalAlertPress = () => {
+    navigation.navigate('FaultList', { filter: FILTER_TYPES.KRITIK });
   };
 
   const handleLogout = async () => {
@@ -356,7 +436,7 @@ const getActivityData = () => {
     return 'İyi Akşamlar';
   };
 
-  // YENİ: İlk yükleme
+  // İlk yükleme
   useEffect(() => {
     fetchFaultReports();
   }, []);
@@ -371,6 +451,9 @@ const getActivityData = () => {
   }
 
   const userRole = user?.role || 'technician';
+  const filteredStats = getFilteredStats();
+  const filteredActions = getFilteredActions();
+  const filteredActivities = getFilteredActivities();
 
   return (
     <View style={styles.container}>
@@ -404,13 +487,20 @@ const getActivityData = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Critical Alert */}
-        <CriticalAlert hasCriticalFaults={hasCriticalFaults} />
+        {/* Critical Alert - AYNI KALDI */}
+        <CriticalAlert 
+          hasCriticalFaults={hasCriticalFaults} 
+          onPress={handleCriticalAlertPress}
+        />
 
-        {/* Stats Grid */}
+        {/* Stats Grid - KRİTİK ARIZA KARTI KALDIRILDI */}
         <View style={styles.statsGrid}>
-          {getFilteredStats().map((item) => (
-            <StatsCard key={item.id} item={item} />
+          {filteredStats.map((item) => (
+            <StatsCard 
+              key={item.id} 
+              item={item} 
+              onPress={handleStatsCardPress}
+            />
           ))}
         </View>
 
@@ -418,7 +508,7 @@ const getActivityData = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Hızlı İşlemler</Text>
           <View style={styles.quickActionsGrid}>
-            {getFilteredActions().map((action) => (
+            {filteredActions.map((action) => (
               <QuickActionButton 
                 key={action.id} 
                 action={action} 
@@ -432,20 +522,24 @@ const getActivityData = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Son Aktivite</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('FaultList')}>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('FaultList')}
+              activeOpacity={0.7}
+            >
               <Text style={styles.seeAllText}>Tümünü Gör</Text>
             </TouchableOpacity>
           </View>
           
           <View style={styles.activityList}>
-            {getFilteredActivities().map((item) => (
-              <ActivityItem key={item.id} item={item} />
+            {filteredActivities.map((item) => (
+              <ActivityItem 
+                key={item.id} 
+                item={item} 
+                onPress={handleActivityPress}
+              />
             ))}
           </View>
         </View>
-
-        {/* Predictive Maintenance Card (Technician only) */}
-        <PredictiveMaintenanceCard userRole={userRole} />
 
         {/* Bottom padding */}
         <View style={styles.bottomPadding} />
@@ -455,6 +549,7 @@ const getActivityData = () => {
       <TouchableOpacity 
         style={styles.fab}
         onPress={() => navigation.navigate('FaultReport')}
+        activeOpacity={0.7}
       >
         <Ionicons name="add" size={24} color="#FFF" />
       </TouchableOpacity>
@@ -462,7 +557,7 @@ const getActivityData = () => {
   );
 }
 
-// Styles aynı kalıyor...
+// Styles - AYNI KALDI
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -533,7 +628,7 @@ const styles = StyleSheet.create({
   criticalAlert: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#FF4757',
     marginHorizontal: 20,
     marginVertical: 10,
     padding: 16,
@@ -703,48 +798,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#FFF',
-  },
-  // Predictive Card
-  predictiveCard: {
-    backgroundColor: '#FFF',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  predictiveHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  predictiveTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginLeft: 8,
-  },
-  predictiveText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  predictiveButton: {
-    backgroundColor: '#667eea',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  predictiveButtonText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
   },
   // FAB
   fab: {
