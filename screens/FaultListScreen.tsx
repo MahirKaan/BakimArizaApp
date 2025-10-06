@@ -675,36 +675,53 @@ export default function FaultListScreen({ navigation }: FaultListScreenProps) {
         </View>
 
         {/* Fault List */}
-        <FlatList
-          data={sortedFaults}
-          renderItem={({ item }) => <FaultCard fault={item} />}
-          keyExtractor={item => item.id.toString()}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.faultsListContent}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={64} color="#CCC" />
-              <Text style={styles.emptyStateTitle}>Arıza bulunamadı</Text>
-              <Text style={styles.emptyStateText}>
-                Arama kriterlerinize uygun arıza kaydı bulunamadı
-              </Text>
-              <TouchableOpacity 
-                style={styles.emptyStateButton}
-                onPress={() => {
-                  setSearchQuery('');
-                  setFilterPriority('all');
-                  setFilterStatus('all');
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-              >
-                <Text style={styles.emptyStateButtonText}>Filtreleri Temizle</Text>
-              </TouchableOpacity>
-            </View>
-          }
-        />
+      <FlatList
+  data={sortedFaults}
+  renderItem={({ item }) => <FaultCard fault={item} />}
+  keyExtractor={item => item.id.toString()}
+  
+  // 🔥 PERFORMANCE OPTIMIZASYONLARI:
+  removeClippedSubviews={true}
+  maxToRenderPerBatch={8}
+  updateCellsBatchingPeriod={50}
+  windowSize={21}
+  initialNumToRender={7}
+  
+  // 📏 DAHA SMOOTH SCROLLING İÇİN:
+  getItemLayout={(data, index) => ({
+    length: 140, // FaultCard'ın yaklaşık yüksekliği
+    offset: 140 * index,
+    index,
+  })}
+  
+  refreshControl={
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+  }
+  
+  // ✅ BUNLAR FLATLIST İÇİNDE OLMALI:
+  showsVerticalScrollIndicator={false}
+  contentContainerStyle={styles.faultsListContent}
+  ListEmptyComponent={
+    <View style={styles.emptyState}>
+      <Ionicons name="search-outline" size={64} color="#CCC" />
+      <Text style={styles.emptyStateTitle}>Arıza bulunamadı</Text>
+      <Text style={styles.emptyStateText}>
+        Arama kriterlerinize uygun arıza kaydı bulunamadı
+      </Text>
+      <TouchableOpacity 
+        style={styles.emptyStateButton}
+        onPress={() => {
+          setSearchQuery('');
+          setFilterPriority('all');
+          setFilterStatus('all');
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+      >
+        <Text style={styles.emptyStateButtonText}>Filtreleri Temizle</Text>
+      </TouchableOpacity>
+    </View>
+  }
+/>
       </View>
 
       {/* Action Sheet */}
